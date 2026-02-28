@@ -92,7 +92,7 @@
   display: block;
   width: 22px;
   height: 2px;
-  background: currentColor;
+  background: var(--brand);
   border-radius: 999px;
 }
 
@@ -103,7 +103,7 @@
   left: 0;
   width: 22px;
   height: 2px;
-  background: currentColor;
+  background: var(--brand);
   border-radius: 999px;
 }
 
