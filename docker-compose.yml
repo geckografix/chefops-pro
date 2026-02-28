@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16
+    container_name: chefops_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chefops
+      POSTGRES_PASSWORD: chefops_password
+      POSTGRES_DB: chefops
+    ports:
+      - "5432:5432"
+    volumes:
+      - chefops_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chefops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  chefops_pgdata:

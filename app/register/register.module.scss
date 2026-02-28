@@ -1,0 +1,51 @@
+.page {
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 560px;
+  padding: 24px;
+
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  color: var(--text);
+
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+}
+
+.title {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.sub {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+}
+
+.label {
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.small {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.link {
+  text-decoration: underline;
+  color: var(--text);
+}

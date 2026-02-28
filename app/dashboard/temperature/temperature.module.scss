@@ -1,0 +1,240 @@
+@use "../../styles/variables" as *;
+
+/* ===== Page wrapper ===== */
+.page {
+  max-width: 980px;
+  margin: 40px auto;
+  padding: 16px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 900;
+  margin: 0;
+}
+
+.subtitle {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.guidance {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ===== Sheet wrapper ===== */
+.sheet {
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* ===== Header row ===== */
+.header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.4fr;
+  font-weight: 900;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border);
+
+  > div {
+    padding: 12px;
+    text-align: left;
+  }
+
+  /* AM column */
+  > :nth-child(2) {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* PM column */
+  > :nth-child(3) {
+    background: rgba(255, 255, 255, 0.025);
+  }
+}
+
+/* ===== Data rows ===== */
+.row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.4fr;
+  align-items: flex-start;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+
+  > div {
+    padding: 12px;
+  }
+
+  /* AM column */
+  > :nth-child(2) {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* PM column */
+  > :nth-child(3) {
+    background: rgba(255, 255, 255, 0.025);
+  }
+}
+
+/* ===== Unit column ===== */
+.unitName {
+  font-weight: 900;
+}
+
+.unitType {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ===== Input cell (AM / PM) ===== */
+.cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ===== Today column ===== */
+.today {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.todayLine {
+  margin-top: 6px;
+}
+
+/* ===== Values & states ===== */
+.valueOk {
+  font-weight: 900;
+}
+
+.valueAmber {
+  font-weight: 900;
+  color: var(--amber);
+}
+
+/* ===== DEF / AMBER badges ===== */
+.badgeAmber {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--amber);
+}
+
+/* ===== DEF button states ===== */
+.defBtn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.defBtnActive {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--amber);
+}
+
+/* ===== Notes ===== */
+.notesInput {
+  width: 140px;
+}
+
+.noteInline {
+  opacity: 0.75;
+}
+
+/* ===== Footer text ===== */
+.footer {
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ===== Responsive: make the sheet usable on mobile ===== */
+@media (max-width: 720px) {
+  .page {
+    margin: 18px auto;
+    padding: 12px;
+  }
+
+  /* Turn header into a simple label row, or hide it (card layout) */
+  .header {
+    display: none;
+  }
+
+  /* Each row becomes a card */
+  .row {
+    grid-template-columns: 1fr;
+    padding: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+
+    > div {
+      padding: 12px;
+      background: transparent;
+    }
+
+    /* Remove column shading on mobile (since it's stacked) */
+    > :nth-child(2),
+    > :nth-child(3) {
+      background: transparent;
+    }
+  }
+
+  /* Give the unit column a strong “card header” feel */
+  .row > :nth-child(1) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 10px;
+  }
+
+  /* AM + PM sections: stacked blocks */
+  .row > :nth-child(2),
+  .row > :nth-child(3) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* Add pseudo-labels so users know what they’re looking at */
+  .row > :nth-child(2)::before {
+    content: "AM";
+    display: block;
+    font-weight: 900;
+    margin-bottom: 8px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+
+  .row > :nth-child(3)::before {
+    content: "PM";
+    display: block;
+    font-weight: 900;
+    margin-bottom: 8px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+
+  .row > :nth-child(4)::before {
+    content: "Today (latest)";
+    display: block;
+    font-weight: 900;
+    margin-bottom: 8px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* Inputs/buttons wrap better */
+  .cell {
+    gap: 10px;
+  }
+
+  .notesInput {
+    width: 100%;
+  }
+}
+

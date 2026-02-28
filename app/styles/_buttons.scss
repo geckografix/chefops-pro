@@ -1,0 +1,90 @@
+.btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg);
+    border-color: var(--amber);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+/* === ChefOps unified button style (touch-friendly) === */
+.btn,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: auto;
+  min-height: 48px; /* finger target */
+  padding: 10px 14px;
+
+  border-radius: 14px;
+  border: 1px solid var(--border);
+
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+
+  transition: transform 0.04s ease, opacity 0.12s ease, background 0.12s ease;
+}
+
+.btn:hover,
+.button:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.btn:active,
+.button:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled,
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* === ChefOps danger button (reject / delete / critical) === */
+.btnDanger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--text);
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.04s ease, opacity 0.12s ease, background 0.12s ease;
+}
+
+.btnDanger:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.85);
+}
+
+.btnDanger:active {
+  transform: translateY(1px);
+}
+
+.btnDanger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

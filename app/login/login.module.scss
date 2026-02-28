@@ -1,0 +1,80 @@
+.page {
+  max-width: 520px;
+  margin: 40px auto;
+  padding: 16px;
+}
+
+.brand {
+  margin-bottom: 14px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.sub {
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.card {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+}
+
+.label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.errorBox {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 120, 120, 0.5);
+  background: rgba(255, 120, 120, 0.1);
+}
+
+.testUsers {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.testUsers b {
+  color: var(--text);
+}
+
+
+.forgotWrap {
+  text-align: right;
+  margin-top: 8px;
+}
+
+.forgotLink {
+  color: var(--amber);
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.forgotLink:hover {
+  filter: brightness(1.1);
+}
+
+.forgotLink:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+

@@ -1,0 +1,213 @@
+.page {
+  max-width: 1100px;
+  margin: 30px auto;
+  padding: 16px;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 900;
+  margin: 0;
+}
+
+.sub {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.card {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 14px;
+}
+
+/* Month cards */
+.monthGrid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.monthCard {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.monthHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 10px;
+}
+
+.monthTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.monthSummary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.kpi {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.kpiLabel {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.kpiValue {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+/* Inputs */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field input,
+.field select {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  width: 100%;
+}
+
+.inputsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Breakdown + actions */
+.breakdown {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.actions {
+  margin-top: auto;
+  padding-top: 10px;
+  display: flex;
+  gap: 10px;
+}
+
+/* Buttons */
+.btn,
+.btnGhost {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.btn {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.btnGhost {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.btn:disabled,
+.btnGhost:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Status colouring */
+.good {
+  color: var(--ok, #22c55e);
+}
+
+.bad {
+  color: var(--bad, #ef4444);
+}
+
+.msg {
+  margin-top: 10px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.pctBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-weight: 900;
+  line-height: 1;
+  min-width: 64px;
+}
+
+.pctBoxGood {
+  background: rgba(30, 160, 90, 0.85);
+}
+
+.pctBoxBad {
+  background: rgba(200, 55, 70, 0.85);
+}
+
+.pctBoxNeutral {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ytdValue {
+  margin: 8px 0;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .monthGrid {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .monthGrid {
+    grid-template-columns: 1fr;
+  }
+}

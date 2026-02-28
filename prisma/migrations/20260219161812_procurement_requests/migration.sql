@@ -1,0 +1,8 @@
+-- CreateEnum
+CREATE TYPE "ProcurementCategory" AS ENUM ('FOOD', 'SUPPLIES');
+
+-- CreateEnum
+CREATE TYPE "ProcurementStatus" AS ENUM ('REQUESTED', 'ORDERED', 'REJECTED', 'DELIVERED', 'CANCELED');
+
+-- CreateEnum
+CREATE TYPE "ProcurementRejectionReason" AS ENUM ('MENU_CHANGE', 'OUT_OF_SEASON', 'SUPPLIER_OUT_OF_STOCK', 'ALREADY_IN_STOCK', 'BUDGET_COST_CONTROL', 'NOT_APPROVED', 'OTHER');

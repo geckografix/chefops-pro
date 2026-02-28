@@ -1,0 +1,57 @@
+.page {
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 640px;
+  padding: 24px;
+
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  color: var(--text);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+}
+
+.title {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.sub {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.primaryBtn {
+  width: 100%;
+  min-height: 48px; /* good finger target */
+  font-weight: 900;
+  border-radius: 14px;
+}
+.postHelp {
+  margin-top: 12px;
+}
