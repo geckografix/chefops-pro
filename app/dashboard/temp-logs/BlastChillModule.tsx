@@ -1,13 +1,40 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import styles from "./blastchill.module.scss";
 import { usePropertySettings } from "@/src/lib/usePropertySettings";
 
 type FoodTempStatus = "OK" | "OUT_OF_RANGE";
 
+function fmtUKDateTimeNoSeconds(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function notesForDisplay(raw: string | null | undefined) {
+  if (!raw) return null;
+
+  const cleaned = raw
+    .replace(/\[(BLAST_CHILL_START|BLAST_CHILL_END)\]/g, "")
+    .replace(/\[(BC:[^\]]+|LEGACY_START:[^\]]+)\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.length ? `NOTES: ${cleaned}` : null;
+}
+
 type OpenBlast = {
   id: string;
-  batchId: string | null; // ✅ can be null for legacy “bad starts”
+  batchId: string | null; // can be null for legacy starts
   foodName: string;
   startAt: string; // ISO
   startTempC: string | null;
@@ -36,6 +63,14 @@ function minutesBetweenLocal(startLocal: string, endLocal: string) {
   return Math.round((b - a) / 60000);
 }
 
+function minutesBetweenISO(startISO: string | null, endISO: string | null) {
+  if (!startISO || !endISO) return null;
+  const a = new Date(startISO).getTime();
+  const b = new Date(endISO).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.round((b - a) / 60000);
+}
+
 function toISOFromLocal(local: string) {
   // local = "YYYY-MM-DDTHH:mm"
   const d = new Date(local);
@@ -44,7 +79,7 @@ function toISOFromLocal(local: string) {
 }
 
 function toLocalInputValueFromISO(iso: string) {
-  // Converts ISO -> "YYYY-MM-DDTHH:mm" in local time
+  // ISO -> "YYYY-MM-DDTHH:mm" in local time
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -71,8 +106,7 @@ function formatLocal(local: string) {
 
 function openDateTimePicker(input: HTMLInputElement | null) {
   if (!input) return;
-  // Chromium supports showPicker
-  // @ts-ignore
+  // @ts-ignore - Chromium supports showPicker()
   if (typeof input.showPicker === "function") input.showPicker();
   else {
     input.focus();
@@ -89,7 +123,11 @@ function displayPerson(p: { name: string | null; email: string } | null) {
   return p.name?.trim() ? p.name : p.email;
 }
 
-export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<void> | void }) {
+export default function BlastChillModule({
+  onSaved,
+}: {
+  onSaved: () => Promise<void> | void;
+}) {
   const { settings } = usePropertySettings();
 
   // Fallbacks until settings loads
@@ -113,14 +151,14 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
   const [finishTempC, setFinishTempC] = useState<string>("");
   const [notes, setNotes] = useState("");
 
-  // ✅ Batch identity (ties START + END together even if names repeat)
-  // IMPORTANT: init empty to avoid hydration mismatch; set on mount
+  // Batch identity (ties START + END together even if names repeat)
+  // Init empty to avoid hydration mismatch; set on mount
   const [batchId, setBatchId] = useState<string>("");
+
   const [isFinishingExisting, setIsFinishingExisting] = useState(false);
 
-  // “Legacy start” support:
-  // If user selects an open item that has no batchId, we keep track of its DB id.
-  // When saving FINISH we’ll tag the END with [LEGACY_START:<id>] so it can be considered “closed”.
+  // Legacy support: if user selects an open item that has no batchId, track its DB id.
+  // When saving FINISH we tag END with [LEGACY_START:<id>]
   const [legacyStartId, setLegacyStartId] = useState<string | null>(null);
 
   // Hidden inputs for native picker modal
@@ -172,7 +210,6 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
     document.head.appendChild(el);
 
     return () => {
-      // Safer cleanup for dev/HMR
       try {
         el.parentNode?.removeChild(el);
       } catch {
@@ -181,7 +218,7 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
     };
   }, []);
 
-  // ✅ Avoid hydration mismatch: generate batchId client-side only
+  // Avoid hydration mismatch: generate batchId client-side only
   useEffect(() => {
     setBatchId(newBatchId());
   }, []);
@@ -221,7 +258,7 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
   async function saveStartOnly() {
     setMsg(null);
 
-    // ✅ Guard: batchId must exist (prevents “bad starts” going forward)
+    // Guard: batchId must exist (prevents “bad starts” going forward)
     if (!batchId) return setMsg("Please wait a moment — preparing batch ID…");
 
     const name = foodName.trim();
@@ -270,7 +307,7 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
   async function saveFinishOnly() {
     setMsg(null);
 
-    // ✅ Guard: must have batchId OR legacyStartId when finishing
+    // Guard: must have batchId OR legacyStartId when finishing
     if (!batchId && !legacyStartId) return setMsg("Please select an open batch to finish.");
 
     const name = foodName.trim();
@@ -288,20 +325,15 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
 
     const st = Number(startTempC);
     if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a valid number.");
-
     const ft = Number(finishTempC);
     if (!Number.isFinite(ft)) return setMsg("Finish temp is required and must be a valid number.");
 
-    // If we’re finishing a legacy start (no BC tag), we must NOT invent a BC id that won’t match the start.
-    // We’ll use a legacy closure tag so open list can treat it as completed:
-    // [LEGACY_START:<startId>]
     const legacyTag = legacyStartId ? `[LEGACY_START:${legacyStartId}]` : "";
     const bcTag = !legacyStartId && batchId ? `[BC:${batchId}]` : "";
 
     setBusy(true);
     try {
       const extraNotes = notes.trim() ? ` ${notes.trim()}` : "";
-
       const endRes = await fetch("/api/temp-logs/upsert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -394,15 +426,18 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
                     </div>
 
                     <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
-                      <b>Start:</b> {new Date(o.startAt).toLocaleString("en-GB")}
+                      <b>Start:</b> {fmtUKDateTimeNoSeconds(o.startAt)}
                       {o.startTempC ? ` • ${o.startTempC}°C` : ""}
                     </div>
 
                     <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                      <b>Started by:</b> {displayPerson(o.createdBy)}
+                      <b>Started by:</b>{" "}
+                      <span className={styles.highlightedAmber}>{displayPerson(o.createdBy)}</span>
                     </div>
 
-                    {o.notes ? <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>{o.notes}</div> : null}
+                    {notesForDisplay(o.notes) ? (
+                      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>{notesForDisplay(o.notes)}</div>
+                    ) : null}
 
                     <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
                       <button
@@ -413,7 +448,6 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
                           setStartAt(toLocalInputValueFromISO(o.startAt));
                           setStartTempC(o.startTempC ?? "");
 
-                          // If batchId exists use it; otherwise treat as legacy
                           if (o.batchId) {
                             setBatchId(o.batchId);
                             setLegacyStartId(null);
@@ -438,7 +472,7 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
         {/* FORM */}
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
           <div>
-            <label style={labelStyle}>Food / dish name</label>
+            <label style={labelStyle}>Food / Dish Name</label>
             <input
               value={foodName}
               onChange={(e) => setFoodName(e.target.value)}
@@ -451,6 +485,7 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
               disabled={isFinishingExisting}
             />
           </div>
+
           <div>
             <label style={labelStyle}>Notes (optional)</label>
             <input
@@ -474,6 +509,7 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
               {formatLocal(startAt)}
             </button>
           </div>
+
           <div>
             <label style={labelStyle}>Start temp (°C) *</label>
             <input
@@ -494,6 +530,7 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
               {formatLocal(finishAt)}
             </button>
           </div>
+
           <div>
             <label style={labelStyle}>Finish temp (°C) *</label>
             <input
@@ -571,96 +608,122 @@ export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<v
             <div style={{ marginTop: 8, opacity: 0.75, fontSize: 12 }}>No completed blast chills yet today.</div>
           ) : (
             <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-              {todayDone.slice(0, 50).map((b) => (
-                <div key={b.batchId} style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: 10 }}>
-                  <div style={{ fontWeight: 900 }}>{b.foodName}</div>
-                  {b.notes ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>{b.notes}</div> : null}
-                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                    <b>Logged by:</b>{" "}
-                    {b.startBy ? (
-                      <>
-                        START{" "}
-                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", opacity: 1 }}>
-                          {b.startBy}
-                        </span>
-                      </>
-                    ) : (
-                      "START —"
-                    )}
-                    {b.endBy ? (
-                      <>
-                        {" "}
-                        → END{" "}
-                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", opacity: 1 }}>
-                          {b.endBy}
-                        </span>
-                      </>
-                    ) : (
-                      ""
-                    )}
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
-                    <b>Start:</b> {b.startAt ? new Date(b.startAt).toLocaleString("en-GB") : "—"}
-                    {b.startTempC ? (
-                      <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
-                        {" "}
-                        • {b.startTempC}°C
-                      </span>
-                    ) : null}
-                  </div>
+              {todayDone.slice(0, 50).map((b) => {
+                const mins = minutesBetweenISO(b.startAt, b.endAt);
+                return (
+                  <div key={b.batchId} style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: 10 }}>
+                    <div style={{ fontWeight: 900 }}>{b.foodName}</div>
 
-                  <div style={{ marginTop: 4, fontSize: 12, opacity: 0.9 }}>
-                    <b>End:</b> {new Date(b.endAt).toLocaleString("en-GB")}
-                    {b.endTempC ? (
-                      <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
-                        {" "}
-                        • {b.endTempC}°C
-                      </span>
+                    {notesForDisplay(b.notes) ? (
+                      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>{notesForDisplay(b.notes)}</div>
                     ) : null}
-                  </div>
 
-                  <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.95 }}>
-                      Status: <span style={{ fontVariantNumeric: "tabular-nums" }}>{b.status ?? "—"}</span>
+                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                      <b>Logged by:</b>{" "}
+                      {b.startBy ? (
+                        <>
+                          START{" "}
+                          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", opacity: 1 }}>
+                            {b.startBy}
+                          </span>
+                        </>
+                      ) : (
+                        "START —"
+                      )}
+                      {b.endBy ? (
+                        <>
+                          {" "}
+                          → END{" "}
+                          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", opacity: 1 }}>
+                            {b.endBy}
+                          </span>
+                        </>
+                      ) : (
+                        ""
+                      )}
                     </div>
 
-                    <div
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(255,255,255,0.18)",
-                        fontWeight: 900,
-                        background:
-                          b.status === "OUT_OF_RANGE"
-                            ? "rgba(245,158,11,0.18)"
-                            : "rgba(16,185,129,0.14)",
-                      }}
-                    >
-                      {b.status ?? "OK"}
+                    <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+                      <b>Start:</b> {b.startAt ? fmtUKDateTimeNoSeconds(b.startAt) : "—"}
+                      {b.startTempC ? (
+                        <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
+                          {" "}
+                          • {b.startTempC}°C
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.9 }}>
+                      <b>End:</b> {fmtUKDateTimeNoSeconds(b.endAt)}
+                      {b.endTempC ? (
+                        <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
+                          {" "}
+                          • {b.endTempC}°C
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.95 }}>
+                        Status: <span style={{ fontVariantNumeric: "tabular-nums" }}>{b.status ?? "—"}</span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            fontWeight: 900,
+                            background:
+                              b.status === "OUT_OF_RANGE"
+                                ? "rgba(245,158,11,0.18)"
+                                : "rgba(16,185,129,0.14)",
+                          }}
+                        >
+                          {b.status ?? "OK"}
+                        </div>
+
+                        {mins != null && (
+                          <div
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: 999,
+                              border: "1px solid rgba(255,255,255,0.18)",
+                              fontWeight: 900,
+                              background: "rgba(255,255,255,0.08)",
+                            }}
+                          >
+                            {mins} min
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
 
         {msg ? (
-          <div style={{ padding: 12, border: "1px solid rgba(255,255,255,0.18)", borderRadius: 10 }}>{msg}</div>
+          <div style={{ padding: 12, border: "1px solid rgba(255,255,255,0.18)", borderRadius: 10 }}>
+            {msg}
+          </div>
         ) : null}
       </div>
     </section>
   );
 }
 
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   display: "block",
   fontWeight: 700,
   marginBottom: 6,
   color: "rgba(255,255,255,0.92)",
 };
 
-const pickerButtonStyle: React.CSSProperties = {
+const pickerButtonStyle: CSSProperties = {
   width: "100%",
   textAlign: "left",
   padding: "10px 12px",
@@ -672,7 +735,7 @@ const pickerButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const buttonStyle: React.CSSProperties = {
+const buttonStyle: CSSProperties = {
   padding: "10px 12px",
   borderRadius: 10,
   border: "1px solid transparent",
@@ -680,7 +743,7 @@ const buttonStyle: React.CSSProperties = {
   fontWeight: 800,
 };
 
-const hiddenInputStyle: React.CSSProperties = {
+const hiddenInputStyle: CSSProperties = {
   position: "absolute",
   opacity: 0,
   pointerEvents: "none",
@@ -688,7 +751,7 @@ const hiddenInputStyle: React.CSSProperties = {
   height: 0,
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%",
   padding: "10px 12px",
   borderRadius: 10,
