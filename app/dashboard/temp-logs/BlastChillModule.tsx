@@ -5,6 +5,30 @@ import { usePropertySettings } from "@/src/lib/usePropertySettings";
 
 type FoodTempStatus = "OK" | "OUT_OF_RANGE";
 
+type OpenBlast = {
+  id: string;
+  batchId: string | null; // ✅ can be null for legacy “bad starts”
+  foodName: string;
+  startAt: string; // ISO
+  startTempC: string | null;
+  notes: string | null;
+  createdByUserId: string | null;
+  createdBy: { id: string; name: string | null; email: string } | null;
+};
+
+type TodayBatch = {
+  batchId: string;
+  foodName: string;
+  notes: string | null;
+  startAt: string | null;
+  startTempC: string | null;
+  endAt: string;
+  endTempC: string | null;
+  status: string | null;
+  startBy: string | null;
+  endBy: string | null;
+};
+
 function minutesBetweenLocal(startLocal: string, endLocal: string) {
   const a = new Date(startLocal).getTime();
   const b = new Date(endLocal).getTime();
@@ -17,6 +41,19 @@ function toISOFromLocal(local: string) {
   const d = new Date(local);
   if (!Number.isFinite(d.getTime())) return null;
   return d.toISOString();
+}
+
+function toLocalInputValueFromISO(iso: string) {
+  // Converts ISO -> "YYYY-MM-DDTHH:mm" in local time
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mi = pad(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
 function formatLocal(local: string) {
@@ -43,11 +80,16 @@ function openDateTimePicker(input: HTMLInputElement | null) {
   }
 }
 
-export default function BlastChillModule({
-  onSaved,
-}: {
-  onSaved: () => Promise<void> | void;
-}) {
+function newBatchId() {
+  return `bc_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function displayPerson(p: { name: string | null; email: string } | null) {
+  if (!p) return "Unknown";
+  return p.name?.trim() ? p.name : p.email;
+}
+
+export default function BlastChillModule({ onSaved }: { onSaved: () => Promise<void> | void }) {
   const { settings } = usePropertySettings();
 
   // Fallbacks until settings loads
@@ -57,21 +99,64 @@ export default function BlastChillModule({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const [open, setOpen] = useState<OpenBlast[]>([]);
+  const [loadingOpen, setLoadingOpen] = useState(false);
+
+  const [todayDone, setTodayDone] = useState<TodayBatch[]>([]);
+  const [loadingToday, setLoadingToday] = useState(false);
+
+  // Form state
   const [foodName, setFoodName] = useState("");
   const [startAt, setStartAt] = useState<string>(""); // "YYYY-MM-DDTHH:mm"
   const [startTempC, setStartTempC] = useState<string>("");
   const [finishAt, setFinishAt] = useState<string>("");
   const [finishTempC, setFinishTempC] = useState<string>("");
   const [notes, setNotes] = useState("");
-  const [batchId, setBatchId] = useState<string>(() =>
-  `bc_${Math.random().toString(36).slice(2, 10)}`
-);
 
+  // ✅ Batch identity (ties START + END together even if names repeat)
+  // IMPORTANT: init empty to avoid hydration mismatch; set on mount
+  const [batchId, setBatchId] = useState<string>("");
+  const [isFinishingExisting, setIsFinishingExisting] = useState(false);
+
+  // “Legacy start” support:
+  // If user selects an open item that has no batchId, we keep track of its DB id.
+  // When saving FINISH we’ll tag the END with [LEGACY_START:<id>] so it can be considered “closed”.
+  const [legacyStartId, setLegacyStartId] = useState<string | null>(null);
+
+  // Hidden inputs for native picker modal
   const startRef = useRef<HTMLInputElement | null>(null);
   const finishRef = useRef<HTMLInputElement | null>(null);
 
+  async function loadOpen() {
+    setLoadingOpen(true);
+    try {
+      const r = await fetch("/api/temp-logs/blast/open", { cache: "no-store" });
+      const data = await r.json().catch(() => ({} as any));
+      if (!r.ok) throw new Error(data?.error || "Failed to load open blast chills.");
+      setOpen(Array.isArray(data.open) ? (data.open as OpenBlast[]) : []);
+    } catch {
+      setOpen([]);
+    } finally {
+      setLoadingOpen(false);
+    }
+  }
+
+  async function loadTodayDone() {
+    setLoadingToday(true);
+    try {
+      const r = await fetch("/api/temp-logs/blast/today", { cache: "no-store" });
+      const data = await r.json().catch(() => ({} as any));
+      if (!r.ok) throw new Error(data?.error || "Failed to load today’s blast chills.");
+      setTodayDone(Array.isArray(data.today) ? (data.today as TodayBatch[]) : []);
+    } catch {
+      setTodayDone([]);
+    } finally {
+      setLoadingToday(false);
+    }
+  }
+
+  // One-time: make placeholders readable inside this module
   useEffect(() => {
-    // One-time: make placeholders readable inside this module
     const styleId = "blast-chill-placeholder-style";
     if (document.getElementById(styleId)) return;
 
@@ -87,8 +172,25 @@ export default function BlastChillModule({
     document.head.appendChild(el);
 
     return () => {
-      el.remove();
+      // Safer cleanup for dev/HMR
+      try {
+        el.parentNode?.removeChild(el);
+      } catch {
+        // ignore
+      }
     };
+  }, []);
+
+  // ✅ Avoid hydration mismatch: generate batchId client-side only
+  useEffect(() => {
+    setBatchId(newBatchId());
+  }, []);
+
+  // Load open + today on mount
+  useEffect(() => {
+    loadOpen();
+    loadTodayDone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const minutes = useMemo(() => {
@@ -104,34 +206,38 @@ export default function BlastChillModule({
     return tempFail || timeFail || orderFail ? "OUT_OF_RANGE" : "OK";
   }, [finishTempC, minutes, targetC, maxMins]);
 
-  async function save() {
+  function resetAllForNext() {
+    setFoodName("");
+    setStartAt("");
+    setStartTempC("");
+    setFinishAt("");
+    setFinishTempC("");
+    setNotes("");
+    setLegacyStartId(null);
+    setIsFinishingExisting(false);
+    setBatchId(newBatchId()); // safe post-mount
+  }
+
+  async function saveStartOnly() {
     setMsg(null);
+
+    // ✅ Guard: batchId must exist (prevents “bad starts” going forward)
+    if (!batchId) return setMsg("Please wait a moment — preparing batch ID…");
 
     const name = foodName.trim();
     if (!name) return setMsg("Food / dish name is required.");
     if (!startAt) return setMsg("Start date/time is required.");
-    if (!finishAt) return setMsg("Finish date/time is required.");
 
     const startISO = toISOFromLocal(startAt);
-    const finishISO = toISOFromLocal(finishAt);
-    if (!startISO || !finishISO) return setMsg("Invalid date/time selected.");
-
-    const mins = minutes;
-    if (mins == null) return setMsg("Could not calculate minutes (check your times).");
-    if (mins < 0) return setMsg("Finish time must be after start time.");
+    if (!startISO) return setMsg("Invalid start date/time.");
 
     const st = Number(startTempC);
-if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a valid number.");
-
-    const ft = Number(finishTempC);
-    if (!Number.isFinite(ft)) return setMsg("Finish temp is required and must be a valid number.");
+    if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a valid number.");
 
     setBusy(true);
     try {
       const extraNotes = notes.trim() ? ` ${notes.trim()}` : "";
-
-      // START (immutable create)
-      const startRes = await fetch("/api/temp-logs/upsert", {
+      const res = await fetch("/api/temp-logs/upsert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -144,12 +250,58 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
         }),
       });
 
-      if (!startRes.ok) {
-        const e = await startRes.json().catch(() => ({} as any));
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any));
         throw new Error(e?.error || "Failed to save Blast Chill START.");
       }
 
-      // END
+      setMsg("START saved. This batch is now open for completion.");
+      resetAllForNext();
+      await loadOpen();
+      await loadTodayDone();
+      await onSaved();
+    } catch (err: any) {
+      setMsg(err?.message || "Save START failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveFinishOnly() {
+    setMsg(null);
+
+    // ✅ Guard: must have batchId OR legacyStartId when finishing
+    if (!batchId && !legacyStartId) return setMsg("Please select an open batch to finish.");
+
+    const name = foodName.trim();
+    if (!name) return setMsg("Food / dish name is required.");
+    if (!startAt) return setMsg("Start date/time is required (select an open batch or set it).");
+    if (!finishAt) return setMsg("Finish date/time is required.");
+
+    const startISO = toISOFromLocal(startAt);
+    const finishISO = toISOFromLocal(finishAt);
+    if (!startISO || !finishISO) return setMsg("Invalid date/time selected.");
+
+    const mins = minutes;
+    if (mins == null) return setMsg("Could not calculate minutes (check your times).");
+    if (mins < 0) return setMsg("Finish time must be after start time.");
+
+    const st = Number(startTempC);
+    if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a valid number.");
+
+    const ft = Number(finishTempC);
+    if (!Number.isFinite(ft)) return setMsg("Finish temp is required and must be a valid number.");
+
+    // If we’re finishing a legacy start (no BC tag), we must NOT invent a BC id that won’t match the start.
+    // We’ll use a legacy closure tag so open list can treat it as completed:
+    // [LEGACY_START:<startId>]
+    const legacyTag = legacyStartId ? `[LEGACY_START:${legacyStartId}]` : "";
+    const bcTag = !legacyStartId && batchId ? `[BC:${batchId}]` : "";
+
+    setBusy(true);
+    try {
+      const extraNotes = notes.trim() ? ` ${notes.trim()}` : "";
+
       const endRes = await fetch("/api/temp-logs/upsert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,7 +311,7 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
           period: null,
           status: computedStatus,
           loggedAt: finishISO,
-          notes: `[BLAST_CHILL_END][BC:${batchId}]${extraNotes}`.trim(),
+          notes: `[BLAST_CHILL_END]${bcTag}${legacyTag}${extraNotes} (mins=${mins})`.trim(),
         }),
       });
 
@@ -168,19 +320,13 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
         throw new Error(e?.error || "Failed to save Blast Chill FINISH.");
       }
 
-      setMsg(computedStatus === "OUT_OF_RANGE" ? "Saved — OUT OF RANGE (amber)." : "Saved — OK.");
-
-      // reset
-      setFoodName("");
-      setStartAt("");
-      setStartTempC("");
-      setFinishAt("");
-      setFinishTempC("");
-      setNotes("");
-      setBatchId(`bc_${Math.random().toString(36).slice(2, 10)}`);
+      setMsg(computedStatus === "OUT_OF_RANGE" ? "FINISH saved — OUT OF RANGE (amber)." : "FINISH saved — OK.");
+      resetAllForNext();
+      await loadOpen();
+      await loadTodayDone();
       await onSaved();
     } catch (err: any) {
-      setMsg(err?.message || "Save failed.");
+      setMsg(err?.message || "Save FINISH failed.");
     } finally {
       setBusy(false);
     }
@@ -211,6 +357,85 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
       />
 
       <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+        {/* OPEN LIST */}
+        <section style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+            <div style={{ fontWeight: 900 }}>Open blast chills</div>
+            <button type="button" onClick={loadOpen} disabled={loadingOpen} style={buttonStyle}>
+              {loadingOpen ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+
+          {open.length === 0 ? (
+            <div style={{ marginTop: 8, opacity: 0.75, fontSize: 12 }}>No open blast chills.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+              {open.slice(0, 30).map((o) => {
+                const isLegacy = !o.batchId;
+                return (
+                  <div key={o.id} style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ fontWeight: 900 }}>{o.foodName}</div>
+                      {isLegacy ? (
+                        <div
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: 999,
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            fontSize: 12,
+                            fontWeight: 900,
+                            opacity: 0.85,
+                          }}
+                          title="Older start logged before batch IDs were enforced"
+                        >
+                          LEGACY
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                      <b>Start:</b> {new Date(o.startAt).toLocaleString("en-GB")}
+                      {o.startTempC ? ` • ${o.startTempC}°C` : ""}
+                    </div>
+
+                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                      <b>Started by:</b> {displayPerson(o.createdBy)}
+                    </div>
+
+                    {o.notes ? <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>{o.notes}</div> : null}
+
+                    <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        style={buttonStyle}
+                        onClick={() => {
+                          setFoodName(o.foodName);
+                          setStartAt(toLocalInputValueFromISO(o.startAt));
+                          setStartTempC(o.startTempC ?? "");
+
+                          // If batchId exists use it; otherwise treat as legacy
+                          if (o.batchId) {
+                            setBatchId(o.batchId);
+                            setLegacyStartId(null);
+                          } else {
+                            setLegacyStartId(o.id);
+                          }
+
+                          setIsFinishingExisting(true);
+                          setMsg(null);
+                        }}
+                      >
+                        Finish this batch
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* FORM */}
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
           <div>
             <label style={labelStyle}>Food / dish name</label>
@@ -218,7 +443,12 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
               value={foodName}
               onChange={(e) => setFoodName(e.target.value)}
               placeholder="e.g., Beef lasagne"
-              style={inputStyle}
+              style={{
+                ...inputStyle,
+                opacity: isFinishingExisting ? 0.7 : 1,
+                cursor: isFinishingExisting ? "not-allowed" : "text",
+              }}
+              disabled={isFinishingExisting}
             />
           </div>
           <div>
@@ -239,18 +469,20 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
               type="button"
               onClick={() => openDateTimePicker(startRef.current)}
               style={pickerButtonStyle}
+              disabled={isFinishingExisting}
             >
               {formatLocal(startAt)}
             </button>
           </div>
           <div>
-            <label style={labelStyle}>Start temp (°C)</label>
+            <label style={labelStyle}>Start temp (°C) *</label>
             <input
               value={startTempC}
               onChange={(e) => setStartTempC(e.target.value)}
               inputMode="decimal"
               placeholder="required"
               style={inputStyle}
+              disabled={isFinishingExisting}
             />
           </div>
         </div>
@@ -258,11 +490,7 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
           <div>
             <label style={labelStyle}>Finish date/time</label>
-            <button
-              type="button"
-              onClick={() => openDateTimePicker(finishRef.current)}
-              style={pickerButtonStyle}
-            >
+            <button type="button" onClick={() => openDateTimePicker(finishRef.current)} style={pickerButtonStyle}>
               {formatLocal(finishAt)}
             </button>
           </div>
@@ -288,14 +516,9 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              background:
-                computedStatus === "OUT_OF_RANGE"
-                  ? "rgba(245, 158, 11, 0.22)"
-                  : "rgba(16, 185, 129, 0.18)",
+              background: computedStatus === "OUT_OF_RANGE" ? "rgba(245, 158, 11, 0.22)" : "rgba(16, 185, 129, 0.18)",
               borderColor:
-                computedStatus === "OUT_OF_RANGE"
-                  ? "rgba(245, 158, 11, 0.70)"
-                  : "rgba(16, 185, 129, 0.70)",
+                computedStatus === "OUT_OF_RANGE" ? "rgba(245, 158, 11, 0.70)" : "rgba(16, 185, 129, 0.70)",
               color: "inherit",
             }}
             role="status"
@@ -308,21 +531,122 @@ if (!Number.isFinite(st)) return setMsg("Start temp is required and must be a va
 
           <div style={{ opacity: 0.9 }}>
             Status:{" "}
-            <b style={{ color: computedStatus === "OUT_OF_RANGE" ? "#fbbf24" : "inherit" }}>
-              {computedStatus}
-            </b>
+            <b style={{ color: computedStatus === "OUT_OF_RANGE" ? "#fbbf24" : "inherit" }}>{computedStatus}</b>
             {minutes != null && minutes < 0 ? " (finish must be after start)" : ""}
+          </div>
+
+          <div style={{ opacity: 0.75, fontSize: 12 }}>
+            Batch:{" "}
+            <span style={{ fontFamily: "monospace" }}>
+              {legacyStartId ? `LEGACY:${legacyStartId}` : batchId || "—"}
+            </span>
           </div>
         </div>
 
-        <button onClick={save} disabled={busy} style={buttonStyle}>
-          {busy ? "Saving…" : "Save blast chill"}
-        </button>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" onClick={saveStartOnly} disabled={busy || !batchId} style={buttonStyle}>
+            {busy ? "Saving…" : "Save START"}
+          </button>
+
+          <button
+            type="button"
+            onClick={saveFinishOnly}
+            disabled={busy || (!batchId && !legacyStartId)}
+            style={buttonStyle}
+          >
+            {busy ? "Saving…" : "Save FINISH"}
+          </button>
+        </div>
+
+        {/* TODAY (completed) */}
+        <section style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+            <div style={{ fontWeight: 900 }}>Today’s completed blast chills</div>
+            <button type="button" onClick={loadTodayDone} disabled={loadingToday} style={buttonStyle}>
+              {loadingToday ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+
+          {todayDone.length === 0 ? (
+            <div style={{ marginTop: 8, opacity: 0.75, fontSize: 12 }}>No completed blast chills yet today.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+              {todayDone.slice(0, 50).map((b) => (
+                <div key={b.batchId} style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: 10 }}>
+                  <div style={{ fontWeight: 900 }}>{b.foodName}</div>
+                  {b.notes ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>{b.notes}</div> : null}
+                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                    <b>Logged by:</b>{" "}
+                    {b.startBy ? (
+                      <>
+                        START{" "}
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", opacity: 1 }}>
+                          {b.startBy}
+                        </span>
+                      </>
+                    ) : (
+                      "START —"
+                    )}
+                    {b.endBy ? (
+                      <>
+                        {" "}
+                        → END{" "}
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", opacity: 1 }}>
+                          {b.endBy}
+                        </span>
+                      </>
+                    ) : (
+                      ""
+                    )}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+                    <b>Start:</b> {b.startAt ? new Date(b.startAt).toLocaleString("en-GB") : "—"}
+                    {b.startTempC ? (
+                      <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
+                        {" "}
+                        • {b.startTempC}°C
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div style={{ marginTop: 4, fontSize: 12, opacity: 0.9 }}>
+                    <b>End:</b> {new Date(b.endAt).toLocaleString("en-GB")}
+                    {b.endTempC ? (
+                      <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
+                        {" "}
+                        • {b.endTempC}°C
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.95 }}>
+                      Status: <span style={{ fontVariantNumeric: "tabular-nums" }}>{b.status ?? "—"}</span>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(255,255,255,0.18)",
+                        fontWeight: 900,
+                        background:
+                          b.status === "OUT_OF_RANGE"
+                            ? "rgba(245,158,11,0.18)"
+                            : "rgba(16,185,129,0.14)",
+                      }}
+                    >
+                      {b.status ?? "OK"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {msg ? (
-          <div style={{ padding: 12, border: "1px solid rgba(255,255,255,0.18)", borderRadius: 10 }}>
-            {msg}
-          </div>
+          <div style={{ padding: 12, border: "1px solid rgba(255,255,255,0.18)", borderRadius: 10 }}>{msg}</div>
         ) : null}
       </div>
     </section>
@@ -343,7 +667,7 @@ const pickerButtonStyle: React.CSSProperties = {
   borderRadius: 10,
   border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(0,0,0,0.35)",
-  color: "rgba(255,255,255,0.92)", // off-white
+  color: "rgba(255,255,255,0.92)",
   fontWeight: 800,
   cursor: "pointer",
 };
@@ -370,6 +694,6 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 10,
   border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(0,0,0,0.25)",
-  color: "rgba(255,255,255,0.92)", // off-white
+  color: "rgba(255,255,255,0.92)",
   outline: "none",
 };

@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../../src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
 
+type Person = { id: string; name: string | null; email: string };
+type FoodLogRow = {
+  id: string;
+  loggedAt: Date;
+  logDate: Date;
+  period: string | null;
+  status: string | null;
+  foodName: string;
+  tempC: any;
+  notes: string | null;
+  createdByUserId: string | null;
+};
 function utcDayStart(date = new Date()) {
   return new Date(
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0)
@@ -27,8 +39,8 @@ export async function GET(req: Request) {
 
     const logDate = utcDayStart(new Date());
 
-    // NOTE: Immutable general food temp logs (no event filtering here)
-    const logs = await prisma.foodTemperatureLog.findMany({
+    // Immutable general food temp logs (no event filtering here)
+    const logs: FoodLogRow[] = await prisma.foodTemperatureLog.findMany({
       where: { propertyId, logDate },
       orderBy: { loggedAt: "desc" },
       select: {
@@ -44,31 +56,31 @@ export async function GET(req: Request) {
       },
     });
 
-    // Resolve "logged by" user details
-    const userIds = Array.from(
-      new Set(logs.map((l) => l.createdByUserId).filter(Boolean) as string[])
-    );
+    // Resolve "logged by" user details (User model uses id)
+    const userIds = Array.from(new Set(logs.map((l) => l.createdByUserId).filter(Boolean))) as string[];
 
-    // IMPORTANT: if your User model uses `id` instead of `userId`, change these fields accordingly.
-    const users = userIds.length
+    const users: Person[] = userIds.length
       ? await prisma.user.findMany({
-          where: { userId: { in: userIds } },
-          select: { userId: true, name: true, email: true },
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true },
         })
       : [];
 
-    const userMap = new Map(users.map((u) => [u.userId, u]));
+    const userMap = new Map<string, Person>(users.map((u) => [u.id, u]));
 
     // Ensure Decimal fields serialize safely + add loggedBy label
-    const safeLogs = logs.map((l: any) => ({
-      ...l,
-      tempC: l.tempC === null ? null : String(l.tempC),
-      loggedBy: l.createdByUserId
-        ? userMap.get(l.createdByUserId)?.name ||
-          userMap.get(l.createdByUserId)?.email ||
-          "Unknown user"
-        : "Unknown user",
-    }));
+    const safeLogs = logs.map((l: any) => {
+      const u = l.createdByUserId ? userMap.get(l.createdByUserId) ?? null : null;
+      const loggedBy = u ? (u.name?.trim() ? u.name : u.email) : "Unknown user";
+
+      return {
+        ...l,
+        loggedAt: l.loggedAt?.toISOString?.() ?? String(l.loggedAt),
+        logDate: l.logDate?.toISOString?.() ?? String(l.logDate),
+        tempC: l.tempC == null ? null : String(l.tempC),
+        loggedBy,
+      };
+    });
 
     // Compliance (minimum 5 AM + 5 PM)
     const amCount = safeLogs.filter((l: any) => l.period === "AM").length;
@@ -89,7 +101,7 @@ export async function GET(req: Request) {
     };
 
     return NextResponse.json({
-      logDate,
+      logDate: logDate.toISOString(),
       logs: safeLogs,
       compliance,
     });

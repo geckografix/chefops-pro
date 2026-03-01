@@ -249,7 +249,7 @@ function displayUser(userId: string | null) {
     // unmatched STARTs (only genuine open batches)
     for (const [batchId, start] of openStartByBatch.entries()) {
       batches.push({
-        key: `${start.foodName}:${batchId}:${start.id}:open`,
+        key: `open-start:${start.id}`,
         foodName: start.foodName,
         startAt: start.loggedAt ?? null,
         startTempC: start.tempC ?? null,
@@ -265,7 +265,7 @@ function displayUser(userId: string | null) {
 
     for (const [name, start] of openStartByFood.entries()) {
       batches.push({
-        key: `${name}:${start.id}:open`,
+        key: `open-start:${start.id}`,
         foodName: name,
         startAt: start.loggedAt ?? null,
         startTempC: start.tempC ?? null,
@@ -565,13 +565,23 @@ batches.sort((a, b) => {
                 {/* Line 3 */}
                 <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
                   <b>Start:</b> {b.startAt ? fmtDT(b.startAt) : "—"}
-                  {b.startTempC ? <span style={{ opacity: 0.9 }}> • {b.startTempC}°C</span> : null}
+                  {b.startTempC ? (
+  <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
+    {" "}
+    • {b.startTempC}°C
+  </span>
+) : null}
                 </div>
 
                 {/* Line 4 */}
                 <div style={{ marginTop: 4, fontSize: 12, opacity: 0.9 }}>
                   <b>End:</b> {b.endAt ? fmtDT(b.endAt) : "—"}
-                  {b.endTempC ? <span style={{ opacity: 0.9 }}> • {b.endTempC}°C</span> : null}
+                  {b.endTempC ? (
+  <span style={{ opacity: 0.9, color: "var(--brand)", fontWeight: 800, fontSize: 13 }}>
+    {" "}
+    • {b.endTempC}°C
+  </span>
+) : null}
                 </div>
 
                 {/* Line 5 */}
@@ -586,7 +596,7 @@ batches.sort((a, b) => {
                 >
                   <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.95 }}>
                     Total blast chill time:{" "}
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ fontVariantNumeric: "tabular-nums",color: "var(--brand)", fontWeight: 800, fontSize: 13  }}>
                       {b.minutes == null ? "—" : `${b.minutes} min`}
                     </span>
                   </div>

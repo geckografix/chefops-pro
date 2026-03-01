@@ -1,6 +1,3 @@
-// This is your Prisma schema file
-// Learn more: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,11 +6,362 @@ datasource db {
   provider = "postgresql"
 }
 
-/**
- * =========================
- * Enums
- * =========================
- */
+model Property {
+  id                  String               @id @default(cuid())
+  name                String
+  timezone            String               @default("Europe/London")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  subscriptionActive  Boolean              @default(true)
+  subscriptionStatus  SubscriptionStatus   @default(TRIALING)
+  trialEndsAt         DateTime?
+  trialStartsAt       DateTime             @default(now())
+  targetFoodCostPct   Int?
+  inviteAudits        InviteAudit[]
+  monthlyFoodCosts    MonthlyFoodCost[]
+  procurementRequests ProcurementRequest[]
+  invites             PropertyInvite[]
+  memberships         PropertyMembership[]
+  settings            PropertySettings?
+  refrigerationUnits  RefrigerationUnit[]
+  rotaShifts          RotaShift[]
+  rotaWeeks           RotaWeek[]
+  temperatureLogs     TemperatureLog[]
+}
+
+model PropertySettings {
+  id                     String   @id @default(cuid())
+  propertyId             String   @unique
+  fridgeMinTenthC        Int      @default(10)
+  fridgeMaxTenthC        Int      @default(50)
+  freezerMinTenthC       Int      @default(-250)
+  freezerMaxTenthC       Int      @default(-150)
+  foodCostTargetBps      Int      @default(3000)
+  cookedMinTenthC        Int      @default(750)
+  reheatedMinTenthC      Int      @default(750)
+  chilledMinTenthC       Int      @default(0)
+  chilledMaxTenthC       Int      @default(50)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  blastChillMaxMinutes   Int      @default(90)
+  blastChillTargetTenthC Int      @default(50)
+  property               Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model TeamHandover {
+  id           String             @id @default(cuid())
+  propertyId   String
+  authorId     String
+  message      String
+  handoverDate DateTime
+  createdAt    DateTime           @default(now())
+  author       User               @relation("TeamHandoverAuthor", fields: [authorId], references: [id])
+  reads        TeamHandoverRead[]
+
+  @@index([propertyId, handoverDate])
+  @@index([propertyId, createdAt])
+}
+
+model TeamHandoverRead {
+  id         String       @id @default(cuid())
+  handoverId String
+  readerId   String
+  readAt     DateTime     @default(now())
+  handover   TeamHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  reader     User         @relation("TeamHandoverReader", fields: [readerId], references: [id])
+
+  @@unique([handoverId, readerId])
+  @@index([readerId, readAt])
+}
+
+model eventFoodTemperatureLog {
+  id              String         @id @default(cuid())
+  propertyId      String
+  eventName       String
+  eventDate       DateTime
+  eventId         String?
+  loggedAt        DateTime       @default(now())
+  logDate         DateTime
+  period          LogPeriod?
+  status          FoodTempStatus @default(OK)
+  foodName        String
+  tempC           Decimal?       @db.Decimal(5, 2)
+  notes           String?
+  createdByUserId String?
+
+  @@index([propertyId, eventDate])
+  @@index([propertyId, eventId, eventDate])
+}
+
+model User {
+  id                           String                  @id @default(cuid())
+  name                         String?
+  email                        String                  @unique
+  passwordHash                 String
+  createdAt                    DateTime                @default(now())
+  updatedAt                    DateTime                @updatedAt
+  inviteAudits                 InviteAudit[]
+  maintenanceCompletions       MaintenanceCompletion[] @relation("MaintenanceCompletedByAdmin")
+  maintenanceReads             MaintenanceRead[]       @relation("MaintenanceReadByAdmin")
+  maintenanceReported          MaintenanceRequest[]    @relation("MaintenanceReportedBy")
+  passwordResetTokens          PasswordResetToken[]
+  procurementRequestsDecided   ProcurementRequest[]    @relation("ProcurementDecidedBy")
+  procurementRequestsRequested ProcurementRequest[]    @relation("ProcurementRequestedBy")
+  createdInvites               PropertyInvite[]
+  memberships                  PropertyMembership[]
+  rotaShifts                   RotaShift[]
+  publishedRotaWeeks           RotaWeek[]              @relation("RotaWeekPublishedBy")
+  teamHandoversAuthored        TeamHandover[]          @relation("TeamHandoverAuthor")
+  teamHandoversRead            TeamHandoverRead[]      @relation("TeamHandoverReader")
+  temperatureLogs              TemperatureLog[]        @relation("UserTemperatureLogs")
+}
+
+model PropertyMembership {
+  id         String         @id @default(cuid())
+  role       MembershipRole @default(PROPERTY_USER)
+  isActive   Boolean        @default(true)
+  propertyId String
+  userId     String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  property   Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, userId])
+  @@index([propertyId])
+  @@index([userId])
+}
+
+model PropertyInvite {
+  id          String         @id @default(cuid())
+  propertyId  String
+  email       String
+  role        MembershipRole @default(PROPERTY_USER)
+  tokenHash   String         @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String?
+  createdAt   DateTime       @default(now())
+  publicToken String?        @unique
+  audits      InviteAudit[]
+  createdBy   User?          @relation(fields: [createdById], references: [id])
+  property    Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([email])
+}
+
+model RefrigerationUnit {
+  id         String            @id @default(cuid())
+  propertyId String
+  name       String
+  type       RefrigerationType @default(FRIDGE)
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  property   Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  logs       TemperatureLog[]
+
+  @@unique([propertyId, name])
+  @@index([propertyId])
+}
+
+model TemperatureLog {
+  id          String            @id @default(cuid())
+  propertyId  String
+  unitId      String
+  valueC      Decimal?          @db.Decimal(5, 2)
+  period      LogPeriod         @default(OTHER)
+  notes       String?
+  loggedAt    DateTime          @default(now())
+  createdById String
+  status      TemperatureStatus @default(NORMAL)
+  createdBy   User              @relation("UserTemperatureLogs", fields: [createdById], references: [id], onDelete: Cascade)
+  property    Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit        RefrigerationUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, loggedAt])
+  @@index([unitId, loggedAt])
+  @@index([createdById, loggedAt])
+}
+
+/// *
+///  * =========================
+///  * Maintenance
+///  * =========================
+model MaintenanceRequest {
+  id           String                 @id @default(cuid())
+  propertyId   String
+  reportedById String
+  title        String
+  details      String?
+  location     String?
+  equipment    String?
+  urgency      MaintenanceUrgency     @default(WEEK)
+  createdAt    DateTime               @default(now())
+  completed    MaintenanceCompletion?
+  read         MaintenanceRead?
+  reportedBy   User                   @relation("MaintenanceReportedBy", fields: [reportedById], references: [id])
+
+  @@index([propertyId, createdAt])
+  @@index([propertyId, urgency])
+}
+
+model MaintenanceRead {
+  id        String             @id @default(cuid())
+  requestId String             @unique
+  adminId   String
+  readAt    DateTime           @default(now())
+  admin     User               @relation("MaintenanceReadByAdmin", fields: [adminId], references: [id])
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, readAt])
+}
+
+model MaintenanceCompletion {
+  id          String             @id @default(cuid())
+  requestId   String             @unique
+  adminId     String
+  completedAt DateTime           @default(now())
+  admin       User               @relation("MaintenanceCompletedByAdmin", fields: [adminId], references: [id])
+  request     MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, completedAt])
+}
+
+model RotaWeek {
+  id            String      @id @default(cuid())
+  propertyId    String
+  weekStart     DateTime
+  notes         String?
+  published     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  isPublished   Boolean     @default(false)
+  publishedAt   DateTime?
+  publishedById String?
+  shifts        RotaShift[]
+  property      Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  publishedBy   User?       @relation("RotaWeekPublishedBy", fields: [publishedById], references: [id])
+
+  @@unique([propertyId, weekStart])
+  @@index([propertyId, weekStart])
+}
+
+model RotaShift {
+  id         String    @id @default(cuid())
+  propertyId String
+  weekId     String
+  userId     String?
+  dayIndex   Int
+  startTime  String
+  endTime    String
+  role       ShiftRole @default(OTHER)
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User?     @relation(fields: [userId], references: [id])
+  week       RotaWeek  @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, weekId])
+  @@index([propertyId, dayIndex])
+  @@index([userId])
+}
+
+model foodTemperatureLog {
+  id              String         @id @default(cuid())
+  propertyId      String
+  loggedAt        DateTime       @default(now())
+  logDate         DateTime
+  period          LogPeriod?
+  status          FoodTempStatus @default(OK)
+  foodName        String
+  tempC           Decimal?       @db.Decimal(5, 2)
+  notes           String?
+  eventId         String?
+  createdByUserId String?
+
+  @@index([propertyId, logDate])
+  @@index([propertyId, eventId, logDate])
+}
+
+model ProcurementRequest {
+  id             String                      @id @default(cuid())
+  propertyId     String
+  category       ProcurementCategory         @default(FOOD)
+  status         ProcurementStatus           @default(REQUESTED)
+  itemName       String
+  quantity       Decimal?                    @db.Decimal(10, 2)
+  unit           String?
+  neededBy       DateTime?
+  notes          String?
+  requestedById  String
+  decidedById    String?
+  decidedAt      DateTime?
+  rejectedReason ProcurementRejectionReason?
+  rejectedNote   String?
+  deliveredAt    DateTime?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  decidedBy      User?                       @relation("ProcurementDecidedBy", fields: [decidedById], references: [id])
+  property       Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  requestedBy    User                        @relation("ProcurementRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, category, status, createdAt])
+  @@index([propertyId, status, neededBy])
+  @@index([requestedById, createdAt])
+  @@index([decidedById, decidedAt])
+}
+
+model MonthlyFoodCost {
+  id                 String   @id @default(cuid())
+  propertyId         String
+  monthStart         DateTime
+  foodPurchasesPence Int      @default(0)
+  foodSalesPence     Int      @default(0)
+  creditsPence       Int      @default(0)
+  openingStockPence  Int      @default(0)
+  closingStockPence  Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  property           Property @relation(fields: [propertyId], references: [id])
+
+  @@unique([propertyId, monthStart])
+  @@index([propertyId, monthStart])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model InviteAudit {
+  id          String            @id @default(cuid())
+  propertyId  String
+  inviteId    String
+  action      InviteAuditAction
+  actorUserId String?
+  note        String?
+  createdAt   DateTime          @default(now())
+  actor       User?             @relation(fields: [actorUserId], references: [id])
+  invite      PropertyInvite    @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  property    Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, createdAt])
+  @@index([inviteId, createdAt])
+  @@index([actorUserId, createdAt])
+}
 
 enum MembershipRole {
   PROPERTY_ADMIN
@@ -81,403 +429,10 @@ enum ProcurementRejectionReason {
   OTHER
 }
 
-// (Maintenance urgency)
 enum MaintenanceUrgency {
   H24
   H48
   WEEK
-}
-
-/**
- * =========================
- * Core Models
- * =========================
- */
-
-model Property {
-  id                String   @id @default(cuid())
-  name              String
-  timezone          String   @default("Europe/London")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  targetFoodCostPct Int? // store as basis points (e.g. 2850 = 28.50%)
-
-  // Subscription / Trial
-  subscriptionStatus SubscriptionStatus @default(TRIALING)
-  trialStartsAt      DateTime           @default(now())
-  trialEndsAt        DateTime?
-  subscriptionActive Boolean            @default(true)
-
-  // Relations
-  memberships         PropertyMembership[]
-  refrigerationUnits  RefrigerationUnit[]
-  temperatureLogs     TemperatureLog[]
-  rotaWeeks           RotaWeek[]
-  rotaShifts          RotaShift[]
-  invites             PropertyInvite[]
-  inviteAudits        InviteAudit[]
-  monthlyFoodCosts    MonthlyFoodCost[]
-  procurementRequests ProcurementRequest[]
-  settings            PropertySettings?
-}
-
-model PropertySettings {
-  id         String   @id @default(cuid())
-  propertyId String   @unique
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  // Store temps as tenths of °C to avoid float issues (e.g. 4.0°C = 40)
-  fridgeMinTenthC Int @default(10) // 1.0°C
-  fridgeMaxTenthC Int @default(50) // 5.0°C
-
-  freezerMinTenthC Int @default(-250) // -25.0°C
-  freezerMaxTenthC Int @default(-150) // -15.0°C
-
-  // Food cost target stored as basis points (1% = 100)
-  foodCostTargetBps Int @default(3000) // 30.00%
-
-  cookedMinTenthC Int @default(750) // 75.0°C
-
-  reheatedMinTenthC Int @default(750) // 75.0°C
-
-  chilledMinTenthC Int @default(0) // 0.0°C
-  chilledMaxTenthC Int @default(50) // 5.0°C
-
-  // Blast chill requirement: reach <= target temp within max minutes
-  blastChillTargetTenthC Int @default(50) // 5.0°C
-  blastChillMaxMinutes   Int @default(90) // minutes
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([propertyId])
-}
-
-model TeamHandover {
-  id         String @id @default(cuid())
-  propertyId String
-
-  // who wrote it
-  authorId String
-  author   User   @relation("TeamHandoverAuthor", fields: [authorId], references: [id])
-
-  // content
-  message String
-
-  // optional: the "shift day" this handover relates to (lets you group by date cleanly)
-  // we’ll set this to the local-date (e.g. 2026-02-22) at creation time.
-  handoverDate DateTime
-
-  createdAt DateTime @default(now())
-
-  reads TeamHandoverRead[]
-
-  @@index([propertyId, handoverDate])
-  @@index([propertyId, createdAt])
-}
-
-model TeamHandoverRead {
-  id         String       @id @default(cuid())
-  handoverId String
-  handover   TeamHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
-
-  // who ticked "read"
-  readerId String
-  reader   User   @relation("TeamHandoverReader", fields: [readerId], references: [id])
-
-  readAt DateTime @default(now())
-
-  @@unique([handoverId, readerId]) // one tick per user per handover
-  @@index([readerId, readAt])
-}
-
-model eventFoodTemperatureLog {
-  id         String @id @default(cuid())
-  propertyId String
-
-  // Identify the event (separate from general logs)
-  eventName String
-  eventDate DateTime // UTC day bucket for the event day
-
-  // Optional: if you later have a real Event model, we can connect it
-  eventId String?
-
-  loggedAt DateTime @default(now())
-  logDate  DateTime // UTC day bucket for the day it was logged (usually same as eventDate)
-
-  period LogPeriod?
-  status FoodTempStatus @default(OK)
-
-  foodName String
-  tempC    Decimal? @db.Decimal(5, 2)
-  notes    String?
-
-  createdByUserId String?
-
-  @@index([propertyId, eventDate])
-  @@index([propertyId, eventId, eventDate])
-}
-
-model User {
-  id                           String               @id @default(cuid())
-  name                         String?
-  email                        String               @unique
-  passwordHash                 String
-  createdAt                    DateTime             @default(now())
-  updatedAt                    DateTime             @updatedAt
-  publishedRotaWeeks           RotaWeek[]           @relation("RotaWeekPublishedBy")
-  procurementRequestsRequested ProcurementRequest[] @relation("ProcurementRequestedBy")
-  procurementRequestsDecided   ProcurementRequest[] @relation("ProcurementDecidedBy")
-
-  // Relations
-  memberships         PropertyMembership[]
-  temperatureLogs     TemperatureLog[]     @relation("UserTemperatureLogs")
-  rotaShifts          RotaShift[]
-  passwordResetTokens PasswordResetToken[]
-
-  // Maintenance relations
-  maintenanceReported    MaintenanceRequest[]    @relation("MaintenanceReportedBy")
-  maintenanceReads       MaintenanceRead[]       @relation("MaintenanceReadByAdmin")
-  // (Maintenance completion relation)
-  maintenanceCompletions MaintenanceCompletion[] @relation("MaintenanceCompletedByAdmin")
-
-  // Invites + audit
-  createdInvites PropertyInvite[]
-  inviteAudits   InviteAudit[]
-
-  // Team Log / Handover
-  teamHandoversAuthored TeamHandover[]     @relation("TeamHandoverAuthor")
-  teamHandoversRead     TeamHandoverRead[] @relation("TeamHandoverReader")
-}
-
-model PropertyMembership {
-  id       String         @id @default(cuid())
-  role     MembershipRole @default(PROPERTY_USER)
-  isActive Boolean        @default(true)
-
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  propertyId String
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([propertyId, userId])
-  @@index([propertyId])
-  @@index([userId])
-}
-
-model PropertyInvite {
-  id         String         @id @default(cuid())
-  propertyId String
-  email      String
-  role       MembershipRole @default(PROPERTY_USER)
-
-  tokenHash   String  @unique
-  publicToken String? @unique
-
-  expiresAt DateTime
-  usedAt    DateTime?
-
-  createdById String?
-  createdAt   DateTime @default(now())
-
-  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-
-  audits InviteAudit[]
-
-  @@index([propertyId])
-  @@index([email])
-}
-
-/**
- * =========================
- * Refrigeration + Temps
- * =========================
- */
-
-model RefrigerationUnit {
-  id         String            @id @default(cuid())
-  propertyId String
-  name       String
-  type       RefrigerationType @default(FRIDGE)
-  isActive   Boolean           @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  property Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  logs     TemperatureLog[]
-
-  @@unique([propertyId, name])
-  @@index([propertyId])
-}
-
-model TemperatureLog {
-  id         String @id @default(cuid())
-  propertyId String
-  unitId     String
-
-  // DEFROST support:
-  status TemperatureStatus @default(NORMAL)
-
-  valueC Decimal?  @db.Decimal(5, 2)
-  period LogPeriod @default(OTHER)
-  notes  String?
-
-  loggedAt DateTime @default(now())
-
-  createdById String
-  createdBy   User              @relation("UserTemperatureLogs", fields: [createdById], references: [id], onDelete: Cascade)
-  unit        RefrigerationUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  property    Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@index([propertyId, loggedAt])
-  @@index([unitId, loggedAt])
-  @@index([createdById, loggedAt])
-}
-
-/**
- * =========================
- * Maintenance
- * =========================
- */
-model MaintenanceRequest {
-  id           String @id @default(cuid())
-  propertyId   String
-  // who reported it
-  reportedById String
-  reportedBy   User   @relation("MaintenanceReportedBy", fields: [reportedById], references: [id])
-
-  // what needs fixing
-  title     String
-  details   String? // optional longer notes
-  location  String? // e.g. "Kitchen prep area", "Walk-in", "Toilets"
-  equipment String? // e.g. "Rational oven", "Dishwasher", "Wall tiles"
-
-  urgency MaintenanceUrgency @default(WEEK)
-
-  createdAt DateTime @default(now())
-
-  // admin acknowledgement (read)
-  read      MaintenanceRead?
-  completed MaintenanceCompletion?
-
-  @@index([propertyId, createdAt])
-  @@index([propertyId, urgency])
-}
-
-model MaintenanceRead {
-  id        String             @id @default(cuid())
-  requestId String             @unique
-  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
-  adminId String
-  admin   User   @relation("MaintenanceReadByAdmin", fields: [adminId], references: [id])
-
-  readAt DateTime @default(now())
-
-  @@index([adminId, readAt])
-}
-
-// (Maintenance Completed)
-model MaintenanceCompletion {
-  id String @id @default(cuid())
-
-  requestId String             @unique
-  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
-  adminId String
-  admin   User   @relation("MaintenanceCompletedByAdmin", fields: [adminId], references: [id])
-
-  completedAt DateTime @default(now())
-
-  @@index([adminId, completedAt])
-}
-
-/**
- * =========================
- * Rotas
- * =========================
- */
-
-model RotaWeek {
-  id         String   @id @default(cuid())
-  propertyId String
-  weekStart  DateTime // Monday 00:00:00 (property timezone conceptually)
-
-  notes     String?
-  published Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  property Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  shifts   RotaShift[]
-
-  isPublished   Boolean   @default(false)
-  publishedAt   DateTime?
-  publishedById String?
-  publishedBy   User?     @relation("RotaWeekPublishedBy", fields: [publishedById], references: [id])
-
-  @@unique([propertyId, weekStart])
-  @@index([propertyId, weekStart])
-}
-
-model RotaShift {
-  id         String @id @default(cuid())
-  propertyId String
-  weekId     String
-
-  userId String? // optional: allow “Unassigned” shifts
-
-  dayIndex  Int // 0=Mon ... 6=Sun
-  startTime String // "09:00" (simple v1)
-  endTime   String // "17:00"
-
-  role  ShiftRole @default(OTHER)
-  notes String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  week     RotaWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
-  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@index([propertyId, weekId])
-  @@index([propertyId, dayIndex])
-  @@index([userId])
-}
-
-model foodTemperatureLog {
-  id         String @id @default(cuid())
-  propertyId String
-
-  // UTC timestamp when recorded
-  loggedAt DateTime @default(now())
-
-  // UTC day bucket for fast "today" queries
-  logDate DateTime
-
-  period LogPeriod? // optional AM/PM/OTHER
-  status FoodTempStatus @default(OK)
-
-  foodName String
-  tempC    Decimal? @db.Decimal(5, 2)
-  notes    String?
-
-  // Optional event reference (nullable; only used when relevant)
-  eventId String?
-
-  // Optional audit
-  createdByUserId String?
-
-  @@index([propertyId, logDate])
-  @@index([propertyId, eventId, logDate])
 }
 
 enum FoodTempStatus {
@@ -486,115 +441,4 @@ enum FoodTempStatus {
   DISCARDED
   REHEATED
   COOLED
-}
-
-model ProcurementRequest {
-  id         String @id @default(cuid())
-  propertyId String
-
-  category ProcurementCategory @default(FOOD)
-  status   ProcurementStatus   @default(REQUESTED)
-
-  itemName String
-  quantity Decimal?  @db.Decimal(10, 2)
-  unit     String? // e.g. "kg", "case", "bottle", "pack"
-  neededBy DateTime?
-  notes    String?
-
-  // Staff who requested it
-  requestedById String
-  requestedBy   User   @relation("ProcurementRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
-
-  // Admin decision info (ordered/rejected)
-  decidedById String?
-  decidedBy   User?     @relation("ProcurementDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  decidedAt   DateTime?
-
-  // Rejection details (only when status = REJECTED)
-  rejectedReason ProcurementRejectionReason?
-  rejectedNote   String?
-
-  // Delivery close-out (optional but very useful)
-  deliveredAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@index([propertyId, category, status, createdAt])
-  @@index([propertyId, status, neededBy])
-  @@index([requestedById, createdAt])
-  @@index([decidedById, decidedAt])
-}
-
-model MonthlyFoodCost {
-  id String @id @default(cuid())
-
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id])
-
-  // Store the month as the first day of that month at 00:00 UTC
-  monthStart DateTime
-
-  // Inputs (all money stored as integers = pence, to avoid float rounding issues)
-  foodPurchasesPence Int @default(0)
-  foodSalesPence     Int @default(0)
-
-  // Optional extras (we can start using these later, but good to include now)
-  creditsPence      Int @default(0)
-  openingStockPence Int @default(0)
-  closingStockPence Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([propertyId, monthStart])
-  @@index([propertyId, monthStart])
-}
-
-/**
- * =========================
- * Password Resets
- * =========================
- */
-
-model PasswordResetToken {
-  id        String @id @default(cuid())
-  userId    String
-  tokenHash String @unique
-
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([expiresAt])
-}
-
-/**
- * =========================
- * Invite Audit Trail
- * =========================
- */
-
-model InviteAudit {
-  id         String            @id @default(cuid())
-  propertyId String
-  inviteId   String
-  action     InviteAuditAction
-
-  actorUserId String? // who did it (can be null)
-  note        String?
-  createdAt   DateTime @default(now())
-
-  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  invite   PropertyInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
-  actor    User?          @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
-
-  @@index([propertyId, createdAt])
-  @@index([inviteId, createdAt])
-  @@index([actorUserId, createdAt])
 }
