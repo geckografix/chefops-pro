@@ -7,6 +7,10 @@ export type PropertySettingsDTO = {
   fridgeMaxTenthC: number;
   freezerMinTenthC: number;
   freezerMaxTenthC: number;
+  refrigerationAmStart: string;
+  refrigerationAmEnd: string;
+  refrigerationPmStart: string;
+  refrigerationPmEnd: string;
 
   foodCostTargetBps: number;
 

@@ -1,5 +1,6 @@
 import { prisma } from "@/src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
+import { getPropertySettings } from "@/src/property-settings";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import styles from "./dashboard.module.scss";
@@ -28,6 +29,16 @@ function formatTimeUK(d: Date) {
   return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(d);
 }
 
+function timeStringToMinutes(value: string) {
+  const [hh, mm] = value.split(":").map(Number);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
+  return hh * 60 + mm;
+}
+
+function nowMinutes(date = new Date()) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session?.user) redirect("/login");
@@ -41,6 +52,11 @@ export default async function DashboardPage() {
     select: { role: true },
   });
   const isAdmin = membership?.role === "PROPERTY_ADMIN";
+
+  const settings = await getPropertySettings(propertyId);
+  const currentMinutes = nowMinutes();
+  const amClosed = currentMinutes > timeStringToMinutes(settings.refrigerationAmEnd);
+  const pmClosed = currentMinutes > timeStringToMinutes(settings.refrigerationPmEnd);
 
   // ===== Temperature snapshot =====
   const units = await prisma.refrigerationUnit.findMany({
@@ -80,8 +96,8 @@ export default async function DashboardPage() {
   }
 
   const totalUnits = units.length;
-  const missingAM = Math.max(0, totalUnits - unitHasAM.size);
-  const missingPM = Math.max(0, totalUnits - unitHasPM.size);
+  const missingAM = amClosed ? Math.max(0, totalUnits - unitHasAM.size) : 0;
+  const missingPM = pmClosed ? Math.max(0, totalUnits - unitHasPM.size) : 0;
 
   // ===== Rotas snapshot (today) =====
   const now = new Date();
@@ -141,12 +157,12 @@ export default async function DashboardPage() {
               <div className={styles.kpiValue}>{totalUnits}</div>
             </div>
 
-            <div className={styles.kpi}>
+            <div className={missingAM > 0 ? `${styles.kpi} ${styles.kpiAmber}` : styles.kpi}>
               <div className={styles.kpiLabel}>Missing AM</div>
               <div className={styles.kpiValue}>{missingAM}</div>
             </div>
 
-            <div className={styles.kpi}>
+            <div className={missingPM > 0 ? `${styles.kpi} ${styles.kpiAmber}` : styles.kpi}>
               <div className={styles.kpiLabel}>Missing PM</div>
               <div className={styles.kpiValue}>{missingPM}</div>
             </div>
@@ -159,7 +175,9 @@ export default async function DashboardPage() {
 
           <div className={styles.metaRow}>
             <span className={styles.meta}>
-              Latest log: <b>{latestLogAt ? formatTimeUK(latestLogAt) : "None today"}</b>
+              Latest log: <b>{latestLogAt ? formatTimeUK(latestLogAt) : "None today"}</b> ·
+              Windows: <b>{settings.refrigerationAmStart}–{settings.refrigerationAmEnd}</b> AM /
+              <b> {settings.refrigerationPmStart}–{settings.refrigerationPmEnd}</b> PM
             </span>
 
             <Link className={styles.cta} href="/dashboard/temperature">

@@ -18,50 +18,42 @@ type LastLog = {
   notes: string | null;
   loggedAt: string;
   byEmail: string;
+  unitType: "FRIDGE" | "FREEZER";
+  inRange: boolean | null;
+};
+
+type UnitStatus = {
+  unitId: string;
+  unitName: string;
+  unitType: "FRIDGE" | "FREEZER";
+  hasAmLog: boolean;
+  hasPmLog: boolean;
+  missedAm: boolean;
+  missedPm: boolean;
+  amLog: LastLog | null;
+  pmLog: LastLog | null;
 };
 
 function tenthToC(v: number) {
   return (v / 10).toFixed(1);
 }
 
-function isOutOfRange(
-  unitType: Unit["type"],
-  status: LastLog["status"],
-  valueC: string | null,
-  settings: {
-    fridgeMinTenthC: number;
-    fridgeMaxTenthC: number;
-    freezerMinTenthC: number;
-    freezerMaxTenthC: number;
-  } | null
-) {
-  if (status === "DEFROST") return false;
-  if (valueC === null) return false;
-
-  const v = Number(valueC);
-  if (Number.isNaN(v)) return false;
-
-  // Fallbacks only apply while settings is loading
-  const fridgeMin = settings ? settings.fridgeMinTenthC / 10 : 0;
-  const fridgeMax = settings ? settings.fridgeMaxTenthC / 10 : 8;
-
-  const freezerMin = settings ? settings.freezerMinTenthC / 10 : -99;
-  const freezerMax = settings ? settings.freezerMaxTenthC / 10 : -18;
-
-  if (unitType === "FRIDGE") return v < fridgeMin || v > fridgeMax;
-  return v < freezerMin || v > freezerMax;
-}
-
 export default function TemperatureSheetPage() {
   const { settings } = usePropertySettings();
+
   const [units, setUnits] = useState<Unit[]>([]);
   const [latest, setLatest] = useState<Record<string, LastLog>>({});
+  const [unitStatus, setUnitStatus] = useState<UnitStatus[]>([]);
+  const [missedAm, setMissedAm] = useState(false);
+  const [missedPm, setMissedPm] = useState(false);
+
   const [am, setAm] = useState<Record<string, string>>({});
   const [pm, setPm] = useState<Record<string, string>>({});
   const [notesAM, setNotesAM] = useState<Record<string, string>>({});
   const [notesPM, setNotesPM] = useState<Record<string, string>>({});
   const [defAM, setDefAM] = useState<Record<string, boolean>>({});
   const [defPM, setDefPM] = useState<Record<string, boolean>>({});
+
   const [msg, setMsg] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
@@ -76,7 +68,11 @@ export default function TemperatureSheetPage() {
     const r = await fetch("/api/temperature/today");
     if (!r.ok) return;
     const data = await r.json();
+
     setLatest(data.latest || {});
+    setUnitStatus(data.unitStatus || []);
+    setMissedAm(!!data.missedAm);
+    setMissedPm(!!data.missedPm);
   }
 
   useEffect(() => {
@@ -153,17 +149,28 @@ export default function TemperatureSheetPage() {
       </p>
 
       <div className={styles.guidance}>
-  {settings ? (
-    <>
-      Permitted ranges: Fridges {tenthToC(settings.fridgeMinTenthC)}°C → {tenthToC(settings.fridgeMaxTenthC)}°C ·
-      Freezers {tenthToC(settings.freezerMinTenthC)}°C → {tenthToC(settings.freezerMaxTenthC)}°C
-    </>
-  ) : (
-    <>Permitted ranges: Fridges 0.0°C → 8.0°C · Freezers ≤ −18.0°C</>
-  )}
-</div>
+        {settings ? (
+          <>
+            Permitted ranges: Fridges {tenthToC(settings.fridgeMinTenthC)}°C →{" "}
+            {tenthToC(settings.fridgeMaxTenthC)}°C · Freezers{" "}
+            {tenthToC(settings.freezerMinTenthC)}°C →{" "}
+            {tenthToC(settings.freezerMaxTenthC)}°C
+          </>
+        ) : (
+          <>Permitted ranges: Fridges 0.0°C → 8.0°C · Freezers ≤ −18.0°C</>
+        )}
+      </div>
 
       {msg && <div className={styles.notice}>{msg}</div>}
+
+      {(missedAm || missedPm) && (
+        <div className={styles.notice}>
+          Missing refrigeration logs today:
+          {missedAm ? " AM" : ""}
+          {missedAm && missedPm ? " and" : ""}
+          {missedPm ? " PM" : ""}.
+        </div>
+      )}
 
       <div className={styles.sheet}>
         <div className={styles.header}>
@@ -176,21 +183,24 @@ export default function TemperatureSheetPage() {
         {sortedUnits.map((u) => {
           const lastAM = latest[`${u.id}:AM`];
           const lastPM = latest[`${u.id}:PM`];
+          const status = unitStatus.find((s) => s.unitId === u.id);
 
-          const amAmber = lastAM ? isOutOfRange(u.type, lastAM.status, lastAM.valueC, settings) : false;
-          const pmAmber = lastPM ? isOutOfRange(u.type, lastPM.status, lastPM.valueC, settings) : false;
-
+          const amAmber = lastAM?.inRange === false;
+          const pmAmber = lastPM?.inRange === false;
           const defA = !!defAM[u.id];
           const defP = !!defPM[u.id];
+          const rowMissed = !!status?.missedAm || !!status?.missedPm;
 
           return (
-            <div key={u.id} className={styles.row}>
+            <div
+              key={u.id}
+              className={rowMissed ? `${styles.row} ${styles.rowMissed}` : styles.row}
+            >
               <div>
                 <div className={styles.unitName}>{u.name}</div>
                 <div className={styles.unitType}>{u.type}</div>
               </div>
 
-              {/* AM */}
               <div className={styles.cell}>
                 <input
                   className="input"
@@ -232,7 +242,6 @@ export default function TemperatureSheetPage() {
                 />
               </div>
 
-              {/* PM */}
               <div className={styles.cell}>
                 <input
                   className="input"
@@ -274,7 +283,6 @@ export default function TemperatureSheetPage() {
                 />
               </div>
 
-              {/* Today */}
               <div className={styles.today}>
                 <div>
                   <b>AM:</b>{" "}
@@ -288,11 +296,7 @@ export default function TemperatureSheetPage() {
                       ) : (
                         <>
                           <span
-                            className={
-                              amAmber
-                                ? styles.valueAmber
-                                : styles.valueOk
-                            }
+                            className={amAmber ? styles.valueAmber : styles.valueOk}
                           >
                             {lastAM.valueC}°C
                           </span>
@@ -308,6 +312,8 @@ export default function TemperatureSheetPage() {
                         {lastAM.notes ? ` — ${lastAM.notes}` : ""}
                       </span>
                     </>
+                  ) : status?.missedAm ? (
+                    <span className={styles.valueAmber}>MISSED</span>
                   ) : (
                     <span className={styles.empty}>—</span>
                   )}
@@ -325,11 +331,7 @@ export default function TemperatureSheetPage() {
                       ) : (
                         <>
                           <span
-                            className={
-                              pmAmber
-                                ? styles.valueAmber
-                                : styles.valueOk
-                            }
+                            className={pmAmber ? styles.valueAmber : styles.valueOk}
                           >
                             {lastPM.valueC}°C
                           </span>
@@ -345,6 +347,8 @@ export default function TemperatureSheetPage() {
                         {lastPM.notes ? ` — ${lastPM.notes}` : ""}
                       </span>
                     </>
+                  ) : status?.missedPm ? (
+                    <span className={styles.valueAmber}>MISSED</span>
                   ) : (
                     <span className={styles.empty}>—</span>
                   )}

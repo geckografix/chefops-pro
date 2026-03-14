@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
+import { getPropertySettings } from "@/src/property-settings";
 
 export async function GET() {
   const session = await getSession();
@@ -23,11 +23,8 @@ export async function GET() {
     return NextResponse.json({ error: "No access to this property" }, { status: 403 });
   }
 
-  const settings = await prisma.propertySettings.upsert({
-    where: { propertyId },
-    create: { propertyId },
-    update: {},
-  });
+    const settings = await getPropertySettings(propertyId);
 
   return NextResponse.json({ settings });
+
 }

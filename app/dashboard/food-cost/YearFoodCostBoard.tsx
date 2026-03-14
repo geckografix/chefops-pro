@@ -1,8 +1,8 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import styles from "./food-cost.module.scss";
 import MonthPanel from "./MonthPanel";
+import { usePropertySettings } from "@/src/lib/usePropertySettings";
 
 export type YearRecord = {
   monthStartISO: string;
@@ -94,6 +94,7 @@ function ytdBoxClass(actualPct: number | null, targetBps: number | null) {
 }
 
 export default function YearFoodCostBoard() {
+  const { settings } = usePropertySettings();
   const thisYear = new Date().getUTCFullYear();
 
   // IMPORTANT: "year" now means FINANCIAL YEAR START (e.g. 2026 = Apr 2026 -> Mar 2027)
@@ -167,16 +168,7 @@ export default function YearFoodCostBoard() {
     setMonths(merged);
 
     // Load target
-    const tr = await fetch("/api/food-cost/target");
-    if (tr.ok) {
-      const tdata = await tr.json().catch(() => null);
-      const bps = typeof (tdata as any)?.targetFoodCostPct === "number" ? (tdata as any).targetFoodCostPct : null;
-      setTargetBps(bps);
-      setTargetInput(bpsToPctString(bps));
-    } else {
-      setTargetBps(null);
-      setTargetInput("");
-    }
+   
 
     setBusy(false);
   }
@@ -185,6 +177,12 @@ export default function YearFoodCostBoard() {
     loadYear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
+
+  useEffect(() => {
+    const bps = settings?.foodCostTargetBps ?? null;
+    setTargetBps(bps);
+    setTargetInput(bpsToPctString(bps));
+  }, [settings]);
 
   const ytd = useMemo(() => ytdPct(months), [months]);
 
@@ -234,23 +232,25 @@ export default function YearFoodCostBoard() {
   async function saveTarget() {
     setMsg(null);
     setBusy(true);
-
     const bps = targetInput.trim() ? pctStringToBps(targetInput) : null;
 
-    const r = await fetch("/api/food-cost/target", {
+    const r = await fetch("/api/property-settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targetFoodCostPct: bps }),
+      body: JSON.stringify({
+        foodCostTargetBps: bps ?? 3000,
+      }),
     });
 
     setBusy(false);
-
     if (!r.ok) {
       const data = await r.json().catch(() => ({}));
       setMsg((data as any)?.error || "Could not save target.");
       return;
     }
 
+    setTargetBps(bps ?? 3000);
+    setTargetInput(bpsToPctString(bps ?? 3000));
     setMsg("Target saved.");
     await loadYear();
   }
@@ -260,31 +260,25 @@ export default function YearFoodCostBoard() {
       <div className={styles.ytdBar}>
         <div className={styles.ytdLeft}>
           <div className={styles.ytdTitle}>Financial Year Food Cost % (Apr–Mar)</div>
-
-          <div className={`${styles.ytdValue} ${styles.pctBox} ${ytdBoxClass(ytd, targetBps)}`}>
-            {ytd === null ? "—" : `${ytd.toFixed(1)}%`}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div className={`${styles.ytdValue} ${styles.pctBox} ${ytdBoxClass(ytd, targetBps)}`}>
+              {ytd === null ? "—" : `${ytd.toFixed(1)}%`}
+            </div>
+            <div
+              className={styles.pctBox}
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.14)",
+              }}
+              title="Admin-set target food cost"
+            >
+              Target: {targetBps === null ? "—" : `${(targetBps / 100).toFixed(2)}%`}
+            </div>
           </div>
-
           <div className={styles.ytdSub}>Calculated as (Total Cost ÷ Total Sales) × 100</div>
         </div>
-
         <div className={styles.ytdRight}>
-          {isAdmin ? (
-            <label className={styles.field}>
-              <span>Target Food Cost %</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  value={targetInput}
-                  onChange={(e) => setTargetInput(e.target.value)}
-                  placeholder="e.g. 28.50"
-                  inputMode="decimal"
-                />
-                <button className={styles.btnGhost} onClick={saveTarget} disabled={busy}>
-                  Save
-                </button>
-              </div>
-            </label>
-          ) : null}
+          
 
           <label className={styles.field}>
   <span>Financial year</span>
@@ -297,7 +291,12 @@ export default function YearFoodCostBoard() {
   </select>
 </label>
 
-          <button className={styles.btnGhost} onClick={loadYear} disabled={busy}>
+          <button
+            className={styles.btnGhost}
+            onClick={loadYear}
+            disabled={busy}
+            style={{ marginTop: 12 }}
+          >
             {busy ? "Loading..." : "Refresh"}
           </button>
         </div>

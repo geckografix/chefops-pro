@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../../src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
 import { Prisma } from "@prisma/client";
+import { getPropertySettings } from "@/src/property-settings";
 
 function utcDayStart(date = new Date()) {
   return new Date(
@@ -22,6 +23,16 @@ function parseBlastBatchId(notes: string | null) {
   if (!notes) return null;
   const m = notes.match(/\[BC:([^\]]+)\]/);
   return m ? m[1] : null;
+}
+
+function parseCheckType(
+  notes: string | null
+): "HOT_HOLD" | "COLD_HOLD" | "COOKED_REHEAT" | "SPOT_CHECK" {
+  if (!notes) return "SPOT_CHECK";
+  if (notes.includes("[HOT_HOLD]")) return "HOT_HOLD";
+  if (notes.includes("[COLD_HOLD]")) return "COLD_HOLD";
+  if (notes.includes("[COOKED_REHEAT]")) return "COOKED_REHEAT";
+  return "SPOT_CHECK";
 }
 const ALLOWED_PERIODS = ["AM", "PM", "OTHER"] as const; // LogPeriod
 const ALLOWED_FOOD_STATUS = ["OK", "OUT_OF_RANGE", "DISCARDED", "REHEATED", "COOLED"] as const; // FoodTempStatus
@@ -114,23 +125,25 @@ const logDate = utcDayStart(now);
 // Blast-chill tags
 const isBlastStart = !!notes && notes.includes("[BLAST_CHILL_START]");
 const isBlastEnd = !!notes && notes.includes("[BLAST_CHILL_END]");
-
-if (isBlastStart && !tempC) {
-  return NextResponse.json(
-    { error: "Start temp is required for blast chill START." },
-    { status: 400 }
-  );
-}
-
-if (isBlastEnd && !tempC) {
-  return NextResponse.json(
-    { error: "Finish temp is required for blast chill END." },
-    { status: 400 }
-  );
-}
+const checkType = parseCheckType(notes);
 
 // If END: enforce pairing + time/temp limits from Settings
 let finalStatus: (typeof ALLOWED_FOOD_STATUS)[number] = status;
+
+if (!isBlastStart && !isBlastEnd && tempC) {
+  const ps = await getPropertySettings(propertyId);
+  const tempValue = Number(tempC.toString());
+
+  if (checkType === "HOT_HOLD") {
+    finalStatus = tempValue >= ps.cookedMinTenthC / 10 ? "OK" : "OUT_OF_RANGE";
+  } else if (checkType === "COLD_HOLD") {
+    const min = ps.chilledMinTenthC / 10;
+    const max = ps.chilledMaxTenthC / 10;
+    finalStatus = tempValue >= min && tempValue <= max ? "OK" : "OUT_OF_RANGE";
+  } else if (checkType === "COOKED_REHEAT") {
+    finalStatus = tempValue >= ps.reheatedMinTenthC / 10 ? "OK" : "OUT_OF_RANGE";
+  }
+}
 
 if (isBlastEnd) {
   // End temp is required
@@ -167,13 +180,10 @@ const start = await prisma.foodTemperatureLog.findFirst({
 
   const mins = Math.round((now.getTime() - start.loggedAt.getTime()) / 60000);
 
-  const ps = await prisma.propertySettings.findUnique({
-    where: { propertyId },
-    select: { blastChillTargetTenthC: true, blastChillMaxMinutes: true },
-  });
+  const ps = await getPropertySettings(propertyId);
 
-  const targetTenth = ps?.blastChillTargetTenthC ?? 50; // default 5.0°C
-  const maxMinutes = ps?.blastChillMaxMinutes ?? 90;
+  const targetTenth = ps.blastChillTargetTenthC;
+  const maxMinutes = ps.blastChillMaxMinutes;
 
   const endC = Number(tempC.toString());
   const endTenth = Math.round(endC * 10);

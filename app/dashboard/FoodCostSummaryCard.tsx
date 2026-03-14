@@ -1,5 +1,6 @@
 import { prisma } from "@/src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
+import { getPropertySettings } from "@/src/property-settings";
 
 function calcCostPence(r: {
   foodPurchasesPence: number | null;
@@ -61,11 +62,8 @@ export default async function FoodCostSummaryCard() {
   const end = new Date(Date.UTC(fyStartYear + 1, 3, 1, 0, 0, 0, 0)); // next Apr 1
 
   // Pull target from property (basis points)
-  const prop = await prisma.property.findUnique({
-    where: { id: propertyId },
-    select: { targetFoodCostPct: true },
-  });
-  const targetBps = typeof prop?.targetFoodCostPct === "number" ? prop.targetFoodCostPct : null;
+  const settings = await getPropertySettings(propertyId);
+  const targetBps = settings.foodCostTargetBps;
 
   const rows = await prisma.monthlyFoodCost.findMany({
     where: { propertyId, monthStart: { gte: start, lt: end } },

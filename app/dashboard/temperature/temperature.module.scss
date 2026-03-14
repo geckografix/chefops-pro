@@ -79,6 +79,11 @@
   }
 }
 
+.rowMissed {
+  border-left: 4px solid var(--amber);
+  background: rgba(245, 158, 11, 0.06);
+}
+
 /* ===== Unit column ===== */
 .unitName {
   font-weight: 900;

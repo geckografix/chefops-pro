@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
+import { getPropertySettings } from "@/src/property-settings";
 
 async function requireAdmin() {
   const session = await getSession();
@@ -35,11 +36,7 @@ export async function GET() {
   const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
-  const settings = await prisma.propertySettings.upsert({
-    where: { propertyId: gate.propertyId },
-    create: { propertyId: gate.propertyId },
-    update: {},
-  });
+  const settings = await getPropertySettings(gate.propertyId);
 
   return NextResponse.json({ settings });
 }
@@ -52,18 +49,71 @@ export async function POST(req: Request) {
 
   const blastMax = asInt(body.blastChillMaxMinutes, 0);
 
+  const current = await getPropertySettings(gate.propertyId);
+
   const data = {
-    fridgeMinTenthC: asInt(body.fridgeMinTenthC, 10),
-    fridgeMaxTenthC: asInt(body.fridgeMaxTenthC, 50),
-    freezerMinTenthC: asInt(body.freezerMinTenthC, -250),
-    freezerMaxTenthC: asInt(body.freezerMaxTenthC, -150),
-    foodCostTargetBps: asInt(body.foodCostTargetBps, 3000),
-    cookedMinTenthC: asInt(body.cookedMinTenthC, 750),
-    reheatedMinTenthC: asInt(body.reheatedMinTenthC, 750),
-    chilledMinTenthC: asInt(body.chilledMinTenthC, 0),
-    chilledMaxTenthC: asInt(body.chilledMaxTenthC, 50),
-    blastChillTargetTenthC: asInt(body.blastChillTargetTenthC, 50),
-    blastChillMaxMinutes: blastMax > 0 ? blastMax : 90,
+    fridgeMinTenthC:
+      body.fridgeMinTenthC === undefined
+        ? current.fridgeMinTenthC
+        : asInt(body.fridgeMinTenthC, current.fridgeMinTenthC),
+    fridgeMaxTenthC:
+      body.fridgeMaxTenthC === undefined
+        ? current.fridgeMaxTenthC
+        : asInt(body.fridgeMaxTenthC, current.fridgeMaxTenthC),
+    freezerMinTenthC:
+      body.freezerMinTenthC === undefined
+        ? current.freezerMinTenthC
+        : asInt(body.freezerMinTenthC, current.freezerMinTenthC),
+    freezerMaxTenthC:
+      body.freezerMaxTenthC === undefined
+        ? current.freezerMaxTenthC
+        : asInt(body.freezerMaxTenthC, current.freezerMaxTenthC),
+    refrigerationAmStart:
+      body.refrigerationAmStart === undefined
+        ? current.refrigerationAmStart
+        : String(body.refrigerationAmStart || current.refrigerationAmStart),
+    refrigerationAmEnd:
+      body.refrigerationAmEnd === undefined
+        ? current.refrigerationAmEnd
+        : String(body.refrigerationAmEnd || current.refrigerationAmEnd),
+    refrigerationPmStart:
+      body.refrigerationPmStart === undefined
+        ? current.refrigerationPmStart
+        : String(body.refrigerationPmStart || current.refrigerationPmStart),
+    refrigerationPmEnd:
+      body.refrigerationPmEnd === undefined
+        ? current.refrigerationPmEnd
+        : String(body.refrigerationPmEnd || current.refrigerationPmEnd),
+    foodCostTargetBps:
+      body.foodCostTargetBps === undefined
+        ? current.foodCostTargetBps
+        : asInt(body.foodCostTargetBps, current.foodCostTargetBps),
+    cookedMinTenthC:
+      body.cookedMinTenthC === undefined
+        ? current.cookedMinTenthC
+        : asInt(body.cookedMinTenthC, current.cookedMinTenthC),
+    reheatedMinTenthC:
+      body.reheatedMinTenthC === undefined
+        ? current.reheatedMinTenthC
+        : asInt(body.reheatedMinTenthC, current.reheatedMinTenthC),
+    chilledMinTenthC:
+      body.chilledMinTenthC === undefined
+        ? current.chilledMinTenthC
+        : asInt(body.chilledMinTenthC, current.chilledMinTenthC),
+    chilledMaxTenthC:
+      body.chilledMaxTenthC === undefined
+        ? current.chilledMaxTenthC
+        : asInt(body.chilledMaxTenthC, current.chilledMaxTenthC),
+    blastChillTargetTenthC:
+      body.blastChillTargetTenthC === undefined
+        ? current.blastChillTargetTenthC
+        : asInt(body.blastChillTargetTenthC, current.blastChillTargetTenthC),
+    blastChillMaxMinutes:
+      body.blastChillMaxMinutes === undefined
+        ? current.blastChillMaxMinutes
+        : blastMax > 0
+        ? Math.min(blastMax, 90)
+        : current.blastChillMaxMinutes,
   };
 
   const settings = await prisma.propertySettings.upsert({

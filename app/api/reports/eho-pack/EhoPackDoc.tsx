@@ -25,6 +25,7 @@ type FridgeLog = {
   period: string | null;
   status: string | null;
   valueC: string | null;
+  outOfRange: boolean;
   loggedBy: string;
   notes: string | null;
 };
@@ -115,22 +116,21 @@ export default function EhoPackDoc({
         <View style={styles.table}>
           <TableRow
             header
-            widths={[18, 10, 10, 20, 10, 32]}
-            cols={["Logged At", "Type", "Period", "Food", "Temp", "Notes / Event"]}
+            widths={[16, 18, 10, 10, 10, 16, 20]}
+            cols={["Logged At", "Unit", "Type", "Period", "Temp", "Status", "Logged by"]}
           />
-          {foodLogs.map((l) => (
+          {fridgeLogs.map((l) => (
             <TableRow
-              key={`${l.kind}-${l.id}`}
-              widths={[18, 10, 10, 20, 10, 32]}
+              key={l.id}
+              widths={[16, 18, 10, 10, 10, 16, 20]}
               cols={[
                 fmtDT(l.loggedAt),
-                l.kind === "event" ? "Event" : "Std",
+                l.unitName,
+                l.unitType,
                 l.period ?? "",
-                l.foodName,
-                l.tempC ? `${l.tempC}°C` : "",
-                l.kind === "event"
-                  ? `${l.eventName ?? ""}${l.eventDate ? ` (${fmtDT(l.eventDate)})` : ""}${l.notes ? ` • ${l.notes}` : ""}`
-                  : l.notes ?? "",
+                l.valueC ? `${l.valueC}°C` : "",
+                l.outOfRange ? `${l.status ?? ""} • AMBER` : l.status ?? "",
+                l.loggedBy,
               ]}
             />
           ))}

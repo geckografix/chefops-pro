@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { getIronSession } from "iron-session";
-import { sessionOptions } from "../../../src/lib/session";
 import { prisma } from "../../../src/lib/prisma";
+import { getSession } from "../../../src/lib/session-helpers";
 
 export async function POST(req: Request) {
-  const res = NextResponse.json({ ok: true });
-  const session = await getIronSession(req, res as any, sessionOptions);
+  const session = await getSession();
 
-  if (!session.user?.activePropertyId || !session.user?.userId) {
+  if (!session?.user?.activePropertyId || !session.user?.userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 

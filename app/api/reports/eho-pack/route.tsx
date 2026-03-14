@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
+import { getPropertySettings } from "@/src/property-settings";
 import React from "react";
 import { pdf } from "@react-pdf/renderer";
 import EhoPackDoc from "./EhoPackDoc";
@@ -76,6 +77,8 @@ export async function GET(req: Request) {
     select: { name: true },
   });
 
+  const settings = await getPropertySettings(propertyId);
+
   const cutoff90 = daysAgo(90);
   const cutoff14 = daysAgo(14);
 
@@ -138,17 +141,33 @@ export async function GET(req: Request) {
     })),
   ];
 
-  const fridge = fridgeLogs.map((l: any) => ({
-    id: l.id,
-    loggedAt: iso(l.loggedAt),
-    unitName: l.unit?.name ?? "Unit",
-    unitType: l.unit?.type ?? "",
-    period: l.period ?? null,
-    status: l.status ?? null,
-    valueC: dec(l.valueC),
-    loggedBy: displayPerson(l.createdBy),
-    notes: l.notes ?? null,
-  }));
+  const fridge = fridgeLogs.map((l: any) => {
+    const valueC = dec(l.valueC);
+    const tenthC =
+      valueC == null || !Number.isFinite(Number(valueC))
+        ? null
+        : Math.round(Number(valueC) * 10);
+
+    const outOfRange =
+      l.status === "DEFROST" || tenthC == null
+        ? false
+        : l.unit?.type === "FREEZER"
+        ? tenthC < settings.freezerMinTenthC || tenthC > settings.freezerMaxTenthC
+        : tenthC < settings.fridgeMinTenthC || tenthC > settings.fridgeMaxTenthC;
+
+    return {
+      id: l.id,
+      loggedAt: iso(l.loggedAt),
+      unitName: l.unit?.name ?? "Unit",
+      unitType: l.unit?.type ?? "",
+      period: l.period ?? null,
+      status: l.status ?? null,
+      valueC,
+      outOfRange,
+      loggedBy: displayPerson(l.createdBy),
+      notes: l.notes ?? null,
+    };
+  });
 
   const maint = maintenance.map((m: any) => ({
     id: m.id,

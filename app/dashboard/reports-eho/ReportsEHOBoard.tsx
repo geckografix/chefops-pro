@@ -1,7 +1,7 @@
 "use client";
-
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePropertySettings } from "@/src/lib/usePropertySettings";
 
 type Person = { id: string; name: string | null; email: string };
 
@@ -140,6 +140,31 @@ function getBlastBatchId(notes: string | null) {
   return m ? m[1] : null;
 }
 
+function isFridgeLogOutOfRange(
+  unitType: string | null | undefined,
+  status: string | null,
+  valueC: string | null,
+  settings: {
+    fridgeMinTenthC: number;
+    fridgeMaxTenthC: number;
+    freezerMinTenthC: number;
+    freezerMaxTenthC: number;
+  } | null
+) {
+  if (!settings) return false;
+  if (status === "DEFROST") return false;
+  if (valueC == null) return false;
+
+  const tenthC = Math.round(Number(valueC) * 10);
+  if (!Number.isFinite(tenthC)) return false;
+
+  if (unitType === "FREEZER") {
+    return tenthC < settings.freezerMinTenthC || tenthC > settings.freezerMaxTenthC;
+  }
+
+  return tenthC < settings.fridgeMinTenthC || tenthC > settings.fridgeMaxTenthC;
+}
+
 export default function ReportsEHOBoard({
   cutoff90ISO,
   cutoff14ISO,
@@ -160,6 +185,7 @@ export default function ReportsEHOBoard({
   users: Person[];
 }) {
   const router = useRouter();
+  const { settings } = usePropertySettings();
   const [tab, setTab] = useState<"food" | "blast" | "fridge" | "maintenance">("food");
   const [q, setQ] = useState("");
 
@@ -362,16 +388,26 @@ batches.sort((a, b) => {
   }
 
   function exportFridgeCsv() {
-    const rows = filtered.fridge.map((l) => ({
-      LoggedAt: l.loggedAt,
-      UnitName: l.unit?.name ?? "",
-      UnitType: l.unit?.type ?? "",
-      Period: l.period,
-      Status: l.status,
-      ValueC: l.valueC,
-      Notes: l.notes,
-      LoggedBy: displayPerson(l.createdBy),
-    }));
+    const rows = filtered.fridge.map((l) => {
+      const outOfRange = isFridgeLogOutOfRange(
+        l.unit?.type,
+        l.status,
+        l.valueC,
+        settings
+      );
+
+      return {
+        LoggedAt: l.loggedAt,
+        UnitName: l.unit?.name ?? "",
+        UnitType: l.unit?.type ?? "",
+        Period: l.period,
+        Status: l.status,
+        ValueC: l.valueC,
+        OutOfRange: outOfRange ? "YES" : "NO",
+        Notes: l.notes,
+        LoggedBy: displayPerson(l.createdBy),
+      };
+    });
     downloadCsv("eho-fridge-temperature-logs-3-months.csv", rows);
   }
 
@@ -636,21 +672,47 @@ batches.sort((a, b) => {
           {filtered.fridge.length === 0 ? (
             <Empty />
           ) : (
-            filtered.fridge.slice(0, 500).map((l) => (
-              <div key={l.id} style={{ border: "1px solid #eee", borderRadius: 14, padding: 12 }}>
-                <div style={{ fontWeight: 800, fontSize: 14 }}>
-                  {l.unit?.name ?? "Unit"} {l.valueC != null ? <span style={{ opacity: 0.85 }}>• {l.valueC}°C</span> : null}
-                </div>
+            filtered.fridge.slice(0, 500).map((l) => {
+              const outOfRange = isFridgeLogOutOfRange(
+                l.unit?.type,
+                l.status,
+                l.valueC,
+                settings
+              );
+
+              return (
+                <div
+                  key={l.id}
+                  style={{
+                    border: outOfRange ? "1px solid #f59e0b" : "1px solid #eee",
+                    borderRadius: 14,
+                    padding: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>
+                    {l.unit?.name ?? "Unit"}{" "}
+                    {l.valueC != null ? (
+                      <span style={{ opacity: 0.85 }}>• {l.valueC}°C</span>
+                    ) : null}
+                  </div>
                 <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
                   {l.unit?.type ? <>{l.unit.type}</> : null}
                   {l.loggedAt ? <> • {fmtDT(l.loggedAt)}</> : null}
                   {l.period ? <> • {l.period}</> : null}
                   {l.status ? <> • {l.status}</> : null}
+                  {outOfRange ? (
+                    <>
+                      {" "}
+                      •{" "}
+                      <span style={{ fontWeight: 800, color: "#b45309" }}>AMBER</span>
+                    </>
+                  ) : null}
                   {l.createdBy ? <> • Logged by {displayPerson(l.createdBy)}</> : null}
                 </div>
                 {l.notes ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>{l.notes}</div> : null}
               </div>
-            ))
+            );
+          })
           )}
           {filtered.fridge.length > 500 ? (
             <div style={{ fontSize: 12, opacity: 0.75 }}>Showing first 500 rows on-screen. Export CSV for full list.</div>

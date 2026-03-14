@@ -16,7 +16,6 @@ model Property {
   subscriptionStatus  SubscriptionStatus   @default(TRIALING)
   trialEndsAt         DateTime?
   trialStartsAt       DateTime             @default(now())
-  targetFoodCostPct   Int?
   inviteAudits        InviteAudit[]
   monthlyFoodCosts    MonthlyFoodCost[]
   procurementRequests ProcurementRequest[]
@@ -36,6 +35,10 @@ model PropertySettings {
   fridgeMaxTenthC        Int      @default(50)
   freezerMinTenthC       Int      @default(-250)
   freezerMaxTenthC       Int      @default(-150)
+  refrigerationAmStart   String   @default("06:00")
+  refrigerationAmEnd     String   @default("10:00")
+  refrigerationPmStart   String   @default("17:00")
+  refrigerationPmEnd     String   @default("21:00")
   foodCostTargetBps      Int      @default(3000)
   cookedMinTenthC        Int      @default(750)
   reheatedMinTenthC      Int      @default(750)

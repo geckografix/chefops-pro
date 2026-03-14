@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/src/lib/prisma";
 import { getSession } from "@/src/lib/session-helpers";
+import { getPropertySettings } from "@/src/property-settings";
 
 export async function GET() {
   const session = await getSession();
@@ -9,12 +10,9 @@ export async function GET() {
   const propertyId = session.user.activePropertyId;
   if (!propertyId) return NextResponse.json({ error: "No active property" }, { status: 400 });
 
-  const prop = await prisma.property.findUnique({
-    where: { id: propertyId },
-    select: { targetFoodCostPct: true },
-  });
+  const settings = await getPropertySettings(propertyId);
 
-  return NextResponse.json({ ok: true, targetFoodCostPct: prop?.targetFoodCostPct ?? null });
+  return NextResponse.json({ ok: true, foodCostTargetBps: settings.foodCostTargetBps });
 }
 
 export async function POST(req: Request) {
@@ -35,17 +33,24 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  const targetFoodCostPct = body?.targetFoodCostPct;
+  const foodCostTargetBps = body?.foodCostTargetBps;
 
-  if (targetFoodCostPct !== null && targetFoodCostPct !== undefined && !Number.isFinite(Number(targetFoodCostPct))) {
-    return NextResponse.json({ error: "targetFoodCostPct must be a number or null" }, { status: 400 });
+  if (foodCostTargetBps !== null && foodCostTargetBps !== undefined && !Number.isFinite(Number(foodCostTargetBps))) {
+    return NextResponse.json({ error: "foodCostTargetBps must be a number or null" }, { status: 400 });
   }
 
-  const updated = await prisma.property.update({
-    where: { id: propertyId },
-    data: { targetFoodCostPct: targetFoodCostPct === null ? null : Number(targetFoodCostPct) },
-    select: { targetFoodCostPct: true },
+  const updated = await prisma.propertySettings.upsert({
+    where: { propertyId },
+    create: {
+      propertyId,
+      foodCostTargetBps: foodCostTargetBps === null ? 3000 : Number(foodCostTargetBps),
+    },
+    update: {
+      foodCostTargetBps: foodCostTargetBps === null ? 3000 : Number(foodCostTargetBps),
+    },
+    select: { foodCostTargetBps: true },
   });
 
-  return NextResponse.json({ ok: true, targetFoodCostPct: updated.targetFoodCostPct });
+  return NextResponse.json({ ok: true, foodCostTargetBps: updated.foodCostTargetBps });
+
 }

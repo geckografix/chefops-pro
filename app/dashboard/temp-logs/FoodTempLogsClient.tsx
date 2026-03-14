@@ -66,11 +66,10 @@ export default function FoodTempLogsClient({
 
   const THRESH = useMemo(
     () => ({
-      // v1 fixed rules (can move into Settings later if you want)
-      HOT_HOLD_MIN: 63,
-      COLD_HOLD_MAX: 8,
-      // Driven by Settings (fallback is safe until settings loads)
-      COOKED_REHEAT_MIN: settings ? settings.cookedMinTenthC / 10 : 75,
+      HOT_HOLD_MIN: settings ? settings.cookedMinTenthC / 10 : 75,
+      COLD_HOLD_MIN: settings ? settings.chilledMinTenthC / 10 : 0,
+      COLD_HOLD_MAX: settings ? settings.chilledMaxTenthC / 10 : 5,
+      COOKED_REHEAT_MIN: settings ? settings.reheatedMinTenthC / 10 : 75,
     }),
     [settings]
   );
@@ -79,7 +78,10 @@ export default function FoodTempLogsClient({
     () => [
       { value: "SPOT_CHECK", label: "Spot check" },
       { value: "HOT_HOLD", label: `Hot hold (>= ${THRESH.HOT_HOLD_MIN}°C)` },
-      { value: "COLD_HOLD", label: `Cold hold (<= ${THRESH.COLD_HOLD_MAX}°C)` },
+      {
+        value: "COLD_HOLD",
+        label: `Cold hold (${THRESH.COLD_HOLD_MIN}°C to ${THRESH.COLD_HOLD_MAX}°C)`,
+      },
       {
         value: "COOKED_REHEAT",
         label: `Cooked/Reheat (>= ${THRESH.COOKED_REHEAT_MIN}°C)`,
@@ -141,8 +143,11 @@ export default function FoodTempLogsClient({
   function computeSuggestedStatus(check: CheckType, tempStr: string): FoodTempStatus | null {
     const n = Number(tempStr);
     if (!Number.isFinite(n)) return null;
+
     if (check === "HOT_HOLD") return n >= THRESH.HOT_HOLD_MIN ? "OK" : "OUT_OF_RANGE";
-    if (check === "COLD_HOLD") return n <= THRESH.COLD_HOLD_MAX ? "OK" : "OUT_OF_RANGE";
+    if (check === "COLD_HOLD") {
+      return n >= THRESH.COLD_HOLD_MIN && n <= THRESH.COLD_HOLD_MAX ? "OK" : "OUT_OF_RANGE";
+    }
     if (check === "COOKED_REHEAT") return n >= THRESH.COOKED_REHEAT_MIN ? "OK" : "OUT_OF_RANGE";
     return null; // SPOT_CHECK = user decides
   }
@@ -291,7 +296,11 @@ export default function FoodTempLogsClient({
         <>
           <section style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 16 }}>
             <h2 style={{ marginTop: 0 }}>Add food temp log</h2>
-
+            <div style={{ opacity: 0.8, marginBottom: 12 }}>
+              Current SOP thresholds: Hot hold / cooked ≥ {THRESH.HOT_HOLD_MIN}°C •
+              Cold hold {THRESH.COLD_HOLD_MIN}°C to {THRESH.COLD_HOLD_MAX}°C •
+              Reheat ≥ {THRESH.COOKED_REHEAT_MIN}°C
+            </div>
             <div style={{ display: "grid", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 12 }}>
                 <div>

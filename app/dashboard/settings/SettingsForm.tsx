@@ -8,6 +8,10 @@ type PropertySettings = {
   fridgeMaxTenthC: number;
   freezerMinTenthC: number;
   freezerMaxTenthC: number;
+  refrigerationAmStart: string;
+  refrigerationAmEnd: string;
+  refrigerationPmStart: string;
+  refrigerationPmEnd: string;
 
   foodCostTargetBps: number;
 
@@ -48,6 +52,10 @@ export default function SettingsForm({ initial }: { initial: PropertySettings })
     fridgeMaxC: tenthToC(initial.fridgeMaxTenthC),
     freezerMinC: tenthToC(initial.freezerMinTenthC),
     freezerMaxC: tenthToC(initial.freezerMaxTenthC),
+    refrigerationAmStart: initial.refrigerationAmStart,
+    refrigerationAmEnd: initial.refrigerationAmEnd,
+    refrigerationPmStart: initial.refrigerationPmStart,
+    refrigerationPmEnd: initial.refrigerationPmEnd,
 
     foodCostPct: bpsToPct(initial.foodCostTargetBps),
 
@@ -66,6 +74,10 @@ export default function SettingsForm({ initial }: { initial: PropertySettings })
       fridgeMaxTenthC: cToTenth(form.fridgeMaxC),
       freezerMinTenthC: cToTenth(form.freezerMinC),
       freezerMaxTenthC: cToTenth(form.freezerMaxC),
+      refrigerationAmStart: form.refrigerationAmStart,
+      refrigerationAmEnd: form.refrigerationAmEnd,
+      refrigerationPmStart: form.refrigerationPmStart,
+      refrigerationPmEnd: form.refrigerationPmEnd,
 
       foodCostTargetBps: pctToBps(form.foodCostPct),
 
@@ -146,6 +158,54 @@ export default function SettingsForm({ initial }: { initial: PropertySettings })
               value={form.freezerMaxC}
               onChange={(e) => setForm((p) => ({ ...p, freezerMaxC: e.target.value }))}
               inputMode="decimal"
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>AM logging start</label>
+            <input
+              className={styles.input}
+              type="time"
+              value={form.refrigerationAmStart}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, refrigerationAmStart: e.target.value }))
+              }
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>AM logging end</label>
+            <input
+              className={styles.input}
+              type="time"
+              value={form.refrigerationAmEnd}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, refrigerationAmEnd: e.target.value }))
+              }
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>PM logging start</label>
+            <input
+              className={styles.input}
+              type="time"
+              value={form.refrigerationPmStart}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, refrigerationPmStart: e.target.value }))
+              }
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>PM logging end</label>
+            <input
+              className={styles.input}
+              type="time"
+              value={form.refrigerationPmEnd}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, refrigerationPmEnd: e.target.value }))
+              }
             />
           </div>
         </div>
